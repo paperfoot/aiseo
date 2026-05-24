@@ -27,12 +27,15 @@ Four user commands:
 ```bash
 aiseo audit page.html                       # full audit of a local file
 aiseo audit page.html --fail-under 80       # CI gate: exit 1 if score < 80
-aiseo audit page.html --out audit.sarif     # GitHub Code Scanning
-aiseo audit page.html --out audit.md        # committable Markdown report
-aiseo audit page.html --factors meta,og     # only show meta+OG suggestions
+aiseo audit page.html --out audit.html      # printable, reviewable report
+aiseo audit page.html --out audit.sarif     # GitHub Code Scanning annotations
+aiseo audit page.html --factors meta,og     # only show meta + OG suggestions
 
 aiseo fetch https://example.com             # audit a live URL
 aiseo fetch https://example.com --fail-under 75 --out audit.sarif
+
+aiseo verify before.json page.html          # re-audit + diff; exit 1 if regression
+                                            # or any previous suggestion still present
 
 aiseo schema faq --qa 'What is GEO?::Generative Engine Optimisation.'
 aiseo schema article --title '...' --description '...' --date-published 2026-05-24 --author 'Dr Jane Smith' --credentials MD
@@ -84,8 +87,36 @@ A single typed JSON envelope. Agents read sub-objects directly; humans read the 
 | `--out` extension | What you get | Use case |
 |---|---|---|
 | `.json` | Pretty JSON envelope | Programmatic, default |
-| `.md` | Markdown report | Commit into a repo |
+| `.html` | Self-contained printable report, serif typography, no JS, no CDN | Share with a client, print, attach to a PR |
 | `.sarif` | SARIF 2.1.0 | GitHub Code Scanning annotations |
+
+### Closing the loop with `verify`
+
+LLMs and coding agents often claim work they did not finish. `verify` is the gate:
+
+```bash
+aiseo audit page.html --out before.json
+# ...agent edits page.html...
+aiseo verify before.json page.html
+```
+
+Returns a typed diff:
+
+```json
+{
+  "previous": { "score": 60 },
+  "current":  { "score": 92 },
+  "delta": {
+    "score_change": 32,
+    "fixed":         ["og:title absent.", "dateModified absent. ..."],
+    "regressed":     [],
+    "still_present": []
+  },
+  "verdict": "pass"
+}
+```
+
+Exit code is `1` if anything is still present or a new suggestion regressed. The audit data is on stdout regardless — the gate only flips the exit code.
 
 ## Why this exists
 

@@ -59,18 +59,18 @@ pub fn analyze(body_text: &str) -> PositionBias {
         && p > 10.0
     {
         warnings.push(format!(
-            "TL;DR appears at {p}% of body; move it into the first 10% so AI platforms catch it in the citation window"
+            "TL;DR sits at {p}% of body. Move into the first 10%."
         ));
     }
     if let Some(p) = stat_pct {
         if p > 30.0 {
             warnings.push(format!(
-                "First statistic appears at {p}% of body; front-load citation-worthy numbers in the first 30%"
+                "First statistic at {p}% of body. Front-load citation-worthy numbers."
             ));
         }
     } else if total >= 200 {
         warnings.push(
-            "No statistics detected; named numerical claims are a strong AI-citation signal (Princeton GEO tactic, replicated in 2026 studies)".to_string(),
+            "No statistics detected. Named numerical claims lift AI citation.".to_string(),
         );
     }
 

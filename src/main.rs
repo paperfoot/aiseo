@@ -54,6 +54,9 @@ fn main() {
         Commands::Fetch { url, fail_under, out, factors } => {
             commands::fetch::run(ctx, url, fail_under, out, factors)
         }
+        Commands::Verify { before, current } => {
+            commands::verify::run(ctx, before, current)
+        }
         Commands::Schema { kind } => commands::schema::run(ctx, kind),
         Commands::AgentInfo => {
             commands::agent_info::run();

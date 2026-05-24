@@ -30,6 +30,15 @@ pub enum AppError {
     /// so CI / agents can branch on it.
     #[error("Audit score {score} below threshold {threshold}")]
     QualityGate { score: u32, threshold: u32 },
+
+    /// `aiseo verify` ran cleanly but the diff says the agent's claimed
+    /// fix did not land. Stdout already holds the structured diff;
+    /// exit 1 so the calling loop can branch.
+    #[error("Verify failed: {still_present} still present, {regressed} regressed")]
+    VerifyFailed {
+        still_present: usize,
+        regressed: usize,
+    },
 }
 
 impl AppError {
@@ -39,7 +48,7 @@ impl AppError {
             Self::Config(_) => 2,
             Self::RateLimited(_) => 4,
             Self::Transient(_) | Self::Io(_) | Self::Update(_) => 1,
-            Self::QualityGate { .. } => 1,
+            Self::QualityGate { .. } | Self::VerifyFailed { .. } => 1,
         }
     }
 
@@ -52,6 +61,7 @@ impl AppError {
             Self::Io(_) => "io_error",
             Self::Update(_) => "update_error",
             Self::QualityGate { .. } => "quality_gate",
+            Self::VerifyFailed { .. } => "verify_failed",
         }
     }
 
@@ -73,6 +83,9 @@ impl AppError {
             ),
             Self::QualityGate { .. } => {
                 "Review stdout `.suggestions[]` and re-run after applying the fixes"
+            }
+            Self::VerifyFailed { .. } => {
+                "Review stdout `.delta.regressed[]` and `.delta.still_present[]`, then re-run"
             }
         }
     }

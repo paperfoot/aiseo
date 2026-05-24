@@ -32,84 +32,84 @@ pub fn build(
 
     // ── Metadata ────────────────────────────────────────────────────────────
     match meta.title.as_deref() {
-        None => out.push("Missing <title>. Add a 50–60 char title with the primary keyword.".into()),
+        None => out.push("Title absent. Aim 50..60 chars.".into()),
         Some(t) if t.chars().count() < 30 => out.push(format!(
-            "Title is short ({} chars). Aim for 50–60 chars including brand.",
+            "Title is {} chars. Aim 50..60.",
             t.chars().count()
         )),
         Some(t) if t.chars().count() > 70 => out.push(format!(
-            "Title is long ({} chars). Search engines truncate past ~60.",
+            "Title is {} chars. Search engines truncate past 60.",
             t.chars().count()
         )),
         _ => {}
     }
 
     match meta.description.as_deref() {
-        None => out.push("Missing meta description. Write 150–160 chars summarising the page.".into()),
+        None => out.push("Meta description absent. 150..160 chars.".into()),
         Some(d) if d.chars().count() < 100 => out.push(format!(
-            "Meta description is short ({} chars). Aim for 150–160 chars.",
+            "Meta description is {} chars. Aim 150..160.",
             d.chars().count()
         )),
         Some(d) if d.chars().count() > 170 => out.push(format!(
-            "Meta description is long ({} chars). Snippets truncate past ~160.",
+            "Meta description is {} chars. Snippets truncate past 160.",
             d.chars().count()
         )),
         _ => {}
     }
 
     if og.title.is_none() {
-        out.push("Missing og:title. Social previews on Facebook, LinkedIn, WhatsApp will be weak.".into());
+        out.push("og:title absent.".into());
     }
     if og.image.is_none() {
-        out.push("Missing og:image. Add a 1200×630px PNG/JPG for clean previews on all messaging apps.".into());
+        out.push("og:image absent. 1200×630.".into());
     }
 
     // ── Content structure ────────────────────────────────────────────────────
     if content.h1.is_empty() {
-        out.push("No <h1>. AI platforms rely on H1 to identify the page's primary subject.".into());
+        out.push("H1 absent.".into());
     } else if content.h1.len() > 1 {
         out.push(format!(
-            "Multiple H1s ({}). Use one H1 per page; demote the rest to H2.",
+            "{} H1s. Use one; demote the rest.",
             content.h1.len()
         ));
     }
     if content.h2.len() < 2 {
         out.push(format!(
-            "Only {} H2 heading(s). 3–5 H2s help AI platforms decompose the page into citable passages.",
+            "{} H2s. 3..5 helps passage-level retrieval.",
             content.h2.len()
         ));
     }
     if content.word_count < 300 {
         out.push(format!(
-            "Body is short ({} words). 800–1500 words tend to win on comprehensiveness for AI citations.",
+            "Body is {} words. 800..1500 tends to win on comprehensiveness.",
             content.word_count
         ));
     }
     if !content.has_tldr {
-        out.push("No TL;DR detected. A 40–60 word TL;DR in the first 10% of the page is a strong AI-citation signal.".into());
+        out.push("No TL;DR. 40..60 words in the first 10%.".into());
     }
     if !content.has_credentials && content.has_author {
-        out.push("Author is present but credentials (MD, PhD, MSc, etc.) aren't. Named credentials lift ChatGPT/Claude citation.".into());
+        out.push("Author has no credentials. MD, PhD, MSc lift ChatGPT and Claude citation.".into());
     }
 
     // ── Schema ───────────────────────────────────────────────────────────────
     if schema_types.is_empty() {
-        out.push("No JSON-LD schema found. At minimum add Article + Organization; FAQ for question pages.".into());
+        out.push("No JSON-LD. At minimum: Article + Organization. FAQ for question pages.".into());
     }
 
     // ── Freshness ────────────────────────────────────────────────────────────
     if fresh.date_modified.is_none() {
-        out.push("Missing dateModified in JSON-LD. Perplexity ranks fresher sources higher.".into());
+        out.push("dateModified absent. Perplexity weights freshness.".into());
     } else if let Some(days) = fresh.days_since_modified
         && days > 90
     {
         out.push(format!(
-            "Content was last modified {} days ago. Refresh for Perplexity / Google AI Mode visibility.",
+            "Last modified {} days ago. Refresh for Perplexity and AI Mode visibility.",
             days
         ));
     }
 
-    // ── Position bias (already worded as suggestions) ────────────────────────
+    // ── Position bias ────────────────────────────────────────────────────────
     out.extend(pos.warnings.iter().cloned());
 
     out

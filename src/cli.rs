@@ -49,6 +49,18 @@ pub enum Commands {
         #[arg(long, value_name = "LIST")]
         factors: Option<String>,
     },
+    /// Verify that a claimed fix actually landed. Loads a previous audit
+    /// JSON, re-audits the current file, and diffs the suggestion lists.
+    /// Exit 1 if any previous suggestion is still present or a new one
+    /// regressed.
+    #[command(after_long_help = VERIFY_HELP)]
+    Verify {
+        /// Path to a previous `aiseo audit ... --out before.json` (envelope
+        /// or raw audit JSON both accepted).
+        before: PathBuf,
+        /// Current file to re-audit. Pass `-` for stdin.
+        current: PathBuf,
+    },
     /// Fetch a live URL and audit the response body. Same envelope as
     /// `audit` plus a `fetched: { url, status, content_type, bytes }` block.
     #[command(after_long_help = FETCH_HELP)]
@@ -99,6 +111,20 @@ pub enum Commands {
         code: i32,
     },
 }
+
+const VERIFY_HELP: &str = "\
+TIPS:
+  • Run audit first with --out before.json, apply your fix, then verify
+  • Exit 1 means: previous suggestions still present, or new ones regressed
+  • Use in an agent loop to stop the agent from claiming work it didn't finish
+
+EXAMPLES:
+  aiseo audit page.html --out before.json
+  # ...agent edits page.html...
+  aiseo verify before.json page.html
+
+  # Verify a deployed page against an earlier snapshot
+  curl -s https://example.com | aiseo verify before.json -";
 
 const FETCH_HELP: &str = "\
 TIPS:

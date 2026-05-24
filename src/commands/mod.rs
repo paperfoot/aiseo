@@ -6,3 +6,4 @@ pub mod fetch;
 pub mod schema;
 pub mod skill;
 pub mod update;
+pub mod verify;

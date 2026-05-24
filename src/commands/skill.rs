@@ -12,7 +12,7 @@ fn skill_content() -> String {
     format!(
         r#"---
 name: {name}
-description: Agent-first SEO / GEO / AEO auditor. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", "generate JSON-LD", "audit a live URL", or mentions SEO, GEO, AEO, AI search optimisation, generative engine optimisation, schema.org, or rich results. Do NOT use for image optimisation or server performance.
+description: Agent-first SEO / GEO / AEO auditor. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", "generate JSON-LD", "audit a live URL", or "verify a fix landed". Triggers on SEO, GEO, AEO, AI search optimisation, generative engine optimisation, schema.org, rich results. Do NOT use for image optimisation or server performance.
 ---
 
 # {name}
@@ -21,18 +21,31 @@ Run `{name} agent-info` for the full capability manifest, flags, exit
 codes, and output shapes. The binary is the documentation.
 
 ```
-{name} audit <file>           # audit a local HTML or Markdown file
+{name} audit <file|->         # audit a local HTML or Markdown file (or stdin)
 {name} fetch <url>            # fetch a live URL, then audit
 {name} schema <type> ...      # generate JSON-LD (faq, article, howto, organization, person)
+{name} verify <before> <now>  # re-audit, diff suggestions, exit 1 on regression
 ```
 
 Useful flags on `audit` / `fetch`:
 
   --fail-under N      exit 1 if score below N (CI gate)
   --out <path>        write report; format auto-detected from extension
-                      (.json, .md, .sarif for GitHub Code Scanning)
+                      .json | .html | .sarif (SARIF lights up GitHub Code Scanning)
   --factors <list>    filter output to comma-separated factors
                       (meta, og, content, schema, freshness, position)
+
+To stop an agent from claiming work it did not finish:
+
+  {name} audit page.html --out before.json
+  # ...agent edits page.html...
+  {name} verify before.json page.html       # exit 1 if regressed or still-present
+
+Composes with any tool that emits HTML or Markdown:
+
+  curl -s https://example.com | {name} audit -
+  search search -q https://hard.com -m scrape --json \
+    | jq -r '.results[0].snippet' | {name} audit -
 
 All commands emit a JSON envelope when piped. Pipe to `jq` to filter.
 "#

@@ -60,6 +60,33 @@ pub fn run() {
                     "suggestions": "[string, ...]"
                 }
             },
+            "verify": {
+                "description": "Re-audit a file and diff against a previous audit JSON. Exit 1 if any previous suggestion is still present or a new one regressed. Use in an agent loop to stop the agent from claiming work it did not finish.",
+                "args": [
+                    {
+                        "name": "before",
+                        "kind": "positional",
+                        "type": "path",
+                        "required": true,
+                        "description": "Path to a previous `aiseo audit ... --out before.json`. Accepts envelope or raw audit JSON."
+                    },
+                    {
+                        "name": "current",
+                        "kind": "positional",
+                        "type": "path",
+                        "required": true,
+                        "description": "Current file to re-audit. Pass `-` for stdin."
+                    }
+                ],
+                "options": [],
+                "output_shape": {
+                    "previous": "{ file, score }",
+                    "current":  "{ file, score }",
+                    "delta":    "{ score_change, fixed[], regressed[], still_present[] }",
+                    "verdict":  "pass | fail"
+                },
+                "exit_codes": "0 if pass (no regressions, no still-present items); 1 if fail (verify_failed)"
+            },
             "fetch": {
                 "description": "Fetch a live URL and audit the response body. Same envelope as `audit` plus a `fetched` metadata block. Use this for deployed pages and competitor audits.",
                 "args": [
