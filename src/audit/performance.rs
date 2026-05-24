@@ -109,7 +109,13 @@ pub fn extract(doc: &Html, raw_html: &str) -> Performance {
 
 fn image_signals(doc: &Html) -> ImageSignals {
     let sel = Selector::parse("img").unwrap();
-    let picture_sel = Selector::parse("picture > source[type^=\"image/\"]").unwrap();
+    // Codex 2026-05-24: the previous selector matched ANY image/* source
+    // including JPEG/PNG — counting legacy formats as "modern". Restrict
+    // to the actually-modern set (webp, avif, jxl).
+    let picture_sel = Selector::parse(
+        "picture > source[type=\"image/webp\"], picture > source[type=\"image/avif\"], picture > source[type=\"image/jxl\"]",
+    )
+    .unwrap();
 
     let imgs: Vec<_> = doc.select(&sel).collect();
     let total = imgs.len();
@@ -179,8 +185,20 @@ fn render_blocking(doc: &Html) -> RenderBlocking {
         }
     }
 
+    // Codex 2026-05-24: filter out non-render-blocking stylesheets.
+    // `media="print"` only loads when printing; `disabled` is dormant;
+    // a `media` query that excludes the current viewport does not
+    // block — but we can't know the viewport statically, so only the
+    // unambiguous cases (print, disabled) are excluded.
     let css_sel = Selector::parse("link[rel=\"stylesheet\"]").unwrap();
-    let stylesheets = head.select(&css_sel).count();
+    let stylesheets = head
+        .select(&css_sel)
+        .filter(|el| {
+            let media = el.value().attr("media").unwrap_or("").to_ascii_lowercase();
+            let disabled = el.value().attr("disabled").is_some();
+            !disabled && media != "print"
+        })
+        .count();
 
     RenderBlocking {
         head_scripts_blocking: blocking_scripts,
@@ -291,8 +309,11 @@ pub fn suggestions(p: &Performance) -> Vec<String> {
         ));
     }
     if p.images.missing_dimensions > 0 && p.images.total > 0 {
+        // Codex 2026-05-24: "guaranteed CLS" was too strong — CSS
+        // `aspect-ratio` or fixed-size containers can reserve space
+        // without explicit width/height attrs.
         out.push(format!(
-            "{} of {} `<img>` missing width/height. Each contributes to Cumulative Layout Shift on first paint.",
+            "{} of {} `<img>` missing width/height. CLS risk unless reserved via CSS `aspect-ratio` / fixed-size container.",
             p.images.missing_dimensions, p.images.total,
         ));
     }
@@ -308,7 +329,7 @@ pub fn suggestions(p: &Performance) -> Vec<String> {
         && p.images.modern_format_via_src == 0
     {
         out.push(
-            "No WebP / AVIF / JXL detected. Modern formats cut 25–50% off image bytes versus JPEG/PNG.".into(),
+            "No WebP / AVIF / JXL detected. Modern formats commonly cut ~25–50% versus comparable JPEG/PNG (content + encoder dependent; see developers.google.com/speed/webp, web.dev/articles/compress-images-avif).".into(),
         );
     }
     if p.render_blocking.head_scripts_blocking > 0 {
@@ -318,8 +339,11 @@ pub fn suggestions(p: &Performance) -> Vec<String> {
         ));
     }
     if p.render_blocking.head_stylesheets > 4 {
+        // Codex 2026-05-24: count alone is an arbitrary threshold; the
+        // real cost rises with bytes too. Phrased as "severity rises
+        // with count and bytes" — we count, we can't yet measure bytes.
         out.push(format!(
-            "{} `<link rel=\"stylesheet\">` in `<head>`. Critical CSS should be inline; ship the rest async.",
+            "{} render-blocking `<link rel=\"stylesheet\">` in `<head>` (severity rises with count and bytes). Inline critical CSS, ship the rest async.",
             p.render_blocking.head_stylesheets,
         ));
     }
@@ -334,8 +358,11 @@ pub fn suggestions(p: &Performance) -> Vec<String> {
         );
     }
     if p.inline_bytes.inline_css > 50_000 {
+        // Codex 2026-05-24: 50KB raw is a noisy proxy; web.dev's
+        // critical-CSS target is ~14KB compressed for the first round
+        // trip. We see raw bytes, so phrase the threshold qualitatively.
         out.push(format!(
-            "{} KB of inline `<style>`. Past ~50KB the critical-CSS shortcut becomes its own performance problem.",
+            "{} KB of inline `<style>` (raw). Keep critical CSS small — roughly under the first-round-trip budget when compressed (web.dev/extract-critical-css).",
             p.inline_bytes.inline_css / 1024,
         ));
     }

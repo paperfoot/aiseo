@@ -37,12 +37,20 @@ pub struct LinkGraph {
     pub generic_anchor_text: usize,
 }
 
-/// Conservative authority-host list. Editorial discretion: kept short to
-/// avoid false confidence; pages that cite outside these still get the
-/// rest of the audit — this only flags pages with zero authoritative
-/// outbound on long content.
+/// Conservative "trusted reference" outbound-host list — NOT a hard GEO
+/// ranking signal. Pages that cite outside this list still get the rest
+/// of the audit. The set distinguishes:
+///   - Governmental + intergovernmental (primary policy / regulatory)
+///   - .edu + academic TLDs (institutional authority)
+///   - Peer-reviewed journals (primary evidence)
+///   - Preprint / repository (signal, not peer-reviewed authority)
+///   - Editorial reference / major press (corroborating)
+///
+/// Codex 2026-05-24 expanded the set; previous "authority" framing
+/// over-claimed — Google's helpful-content guidance treats clear
+/// sourcing as a trust signal, not a documented ranking lever.
 const AUTHORITY_DOMAINS: &[&str] = &[
-    // Governmental
+    // Governmental + intergovernmental
     "nih.gov",
     "cdc.gov",
     "fda.gov",
@@ -51,16 +59,26 @@ const AUTHORITY_DOMAINS: &[&str] = &[
     "ema.europa.eu",
     "nice.org.uk",
     "gov.uk",
-    "gov",
-    // Scholarly
+    "nhs.uk",
+    "ac.uk",
+    "oecd.org",
+    "worldbank.org",
+    "imf.org",
+    "un.org",
+    "unesco.org",
+    // Institutional / academic
+    ".edu",
+    ".ac.uk",
+    ".ac.jp",
+    "ox.ac.uk",
+    "cam.ac.uk",
+    "harvard.edu",
+    "mit.edu",
+    "stanford.edu",
+    // Peer-reviewed journals
     "doi.org",
     "pubmed.ncbi.nlm.nih.gov",
     "ncbi.nlm.nih.gov",
-    "arxiv.org",
-    "biorxiv.org",
-    "medrxiv.org",
-    "ssrn.com",
-    "scholar.google",
     "nature.com",
     "science.org",
     "cell.com",
@@ -74,7 +92,14 @@ const AUTHORITY_DOMAINS: &[&str] = &[
     "springer.com",
     "wiley.com",
     "sciencedirect.com",
-    // Editorial reference
+    "cochranelibrary.com",
+    // Preprint / repository (signal, not peer-reviewed authority)
+    "arxiv.org",
+    "biorxiv.org",
+    "medrxiv.org",
+    "ssrn.com",
+    "scholar.google",
+    // Editorial reference / major press
     "wikipedia.org",
     "britannica.com",
     "reuters.com",
@@ -184,7 +209,16 @@ fn is_authority(host: &str) -> bool {
     let h = host.trim_start_matches("www.").to_ascii_lowercase();
     AUTHORITY_DOMAINS.iter().any(|d| {
         let d = d.trim_start_matches("www.");
-        h == *d || h.ends_with(&format!(".{d}"))
+        // TLD-style entries start with a dot ("edu", "ac.uk") — match
+        // as a suffix on any host. Domain entries match either exactly
+        // or as a parent domain.
+        if let Some(suffix) = d.strip_prefix('.') {
+            h.ends_with(suffix) && h.contains(&format!(".{suffix}"))
+                || h.ends_with(&format!(".{suffix}"))
+                || h.ends_with(suffix)
+        } else {
+            h == *d || h.ends_with(&format!(".{d}"))
+        }
     })
 }
 
@@ -217,8 +251,11 @@ fn header_has_nav(el: scraper::ElementRef<'_>) -> bool {
 pub fn suggestions(lg: &LinkGraph, word_count: usize) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if word_count >= 600 && lg.authority_external == 0 {
+        // Codex 2026-05-24: this is a trust / sourcing signal, not a
+        // ranking factor. Google's helpful-content guidance treats clear
+        // sourcing as one signal among many. Worded accordingly.
         out.push(
-            "No outbound links to authority sources (.gov, .edu, journals, Wikipedia, major press) in main content. AEO surfaces reward citation discipline.".into(),
+            "No outbound links to trusted-reference sources (.gov, .edu, peer-reviewed journals, major press) in main content. Clear sourcing is a trust signal for both readers and AI retrievers.".into(),
         );
     }
     if lg.generic_anchor_text >= 3 {

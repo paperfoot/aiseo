@@ -182,9 +182,24 @@ pub fn run(
                 "X-Robots-Tag header is `{xrt}`. Page excluded from index at the header level — meta-robots can't override this."
             ));
         }
+        if has("nofollow") && !has("noindex") {
+            extra_suggestions.push(format!(
+                "X-Robots-Tag header includes `nofollow`. Links on this page pass no authority."
+            ));
+        }
+        if has("noimageindex") {
+            extra_suggestions.push(
+                "X-Robots-Tag includes `noimageindex`. Page images won't appear in image search.".into(),
+            );
+        }
+        // Codex 2026-05-24: `noai`/`noimageai` are non-standard. Google
+        // documents `Google-Extended` via robots.txt as the supported
+        // AI-training control; Anthropic documents ClaudeBot/Claude-User
+        // user-agent controls in robots.txt. Surface the directive as
+        // observed, do not claim major crawlers honour it.
         if has("noai") || has("noimageai") {
             extra_suggestions.push(format!(
-                "X-Robots-Tag includes `noai`/`noimageai`. AI training crawlers are explicitly blocked at the header."
+                "X-Robots-Tag includes `noai`/`noimageai` (non-standard — Google and Anthropic document robots.txt user-agent controls instead, not these directives). Treat as a signal of intent, not enforcement."
             ));
         }
     }

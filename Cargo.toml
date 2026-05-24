@@ -1,6 +1,6 @@
 [package]
 name = "aiseo"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 rust-version = "1.85"
 description = "Agent-first CLI for SEO, GEO (generative engine optimisation), and AEO (answer engine optimisation) audits."

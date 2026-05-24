@@ -206,10 +206,14 @@ pub fn audit_content(
     }
     suggestions.extend(performance::suggestions(&performance));
     suggestions.extend(links::suggestions(&link_graph, content.word_count));
-    if freshness.schema_vs_visible_mismatch {
-        suggestions.push(
-            "Schema dateModified is newer than the visible \"Updated/Modified\" signal (or there is no visible date at all). Update both, not just the schema.".into(),
-        );
+    match freshness.schema_vs_visible_severity {
+        freshness::MismatchSeverity::Mild => suggestions.push(
+            "Schema dateModified is mildly newer (>30 days) than the visible \"Updated/Modified\" signal. Google's publication-dates guidance says visible and structured dates should match.".into(),
+        ),
+        freshness::MismatchSeverity::Severe => suggestions.push(
+            "Schema dateModified is severely out of sync with visible signals (gap >180 days, or no visible date at all on long content). Refresh visible dates alongside the schema, not just the schema.".into(),
+        ),
+        freshness::MismatchSeverity::None => {}
     }
     let score_breakdown = suggest::score_breakdown(
         &meta,

@@ -51,9 +51,24 @@ pub struct Freshness {
     /// <date>" string found in the body text.
     pub visible_updated_label: Option<String>,
     /// True when JSON-LD claims a dateModified that's substantially newer
-    /// (>180 days) than the latest visible signal. Hard signal that the
-    /// schema is being updated without the visible text being refreshed.
+    /// than the latest visible signal. Hard signal that the schema is
+    /// being updated without the visible text being refreshed.
+    ///
+    /// Codex 2026-05-24: Google's publication-dates guidance is that
+    /// visible + structured dates should match — no documented grace
+    /// period. We escalate by severity: any parsed mismatch >30 days is
+    /// `Mild`, >180 days is `Severe`. The boolean above stays for
+    /// backward-compat; the severity field is what suggest.rs reads.
     pub schema_vs_visible_mismatch: bool,
+    pub schema_vs_visible_severity: MismatchSeverity,
+}
+
+#[derive(Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MismatchSeverity {
+    None,
+    Mild,
+    Severe,
 }
 
 pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshness {
@@ -88,26 +103,39 @@ pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshne
         .flatten()
         .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "));
 
-    // Schema-vs-visible mismatch: schema dateModified parses, visible
-    // signals do not corroborate (or are >180 days older than schema).
-    let schema_vs_visible_mismatch = match (
-        date_modified.as_deref().and_then(parse_date),
-        time_datetime.as_deref().and_then(parse_date).or_else(|| {
-            visible_updated_label
-                .as_deref()
-                .and_then(extract_year_from_label)
-                .map(|y| NaiveDate::from_ymd_opt(y as i32, 1, 1))
-                .flatten()
-        }),
-    ) {
-        (Some(schema), Some(visible)) => (schema - visible).num_days() > 180,
-        (Some(_), None) if date_modified.is_some() => {
-            // Schema has a modified date but body has neither a <time>
-            // nor an "Updated" label. Flag only on long content.
-            body_text.split_whitespace().count() >= 400
+    // Schema-vs-visible mismatch with severity escalation.
+    // - Mild: schema dateModified parses, visible date parses, gap >30 days
+    // - Severe: gap >180 days, OR schema-modified present + no visible date
+    //   on long content
+    let visible_date = time_datetime.as_deref().and_then(parse_date).or_else(|| {
+        visible_updated_label
+            .as_deref()
+            .and_then(extract_year_from_label)
+            .and_then(|y| NaiveDate::from_ymd_opt(y as i32, 1, 1))
+    });
+    let schema_date = date_modified.as_deref().and_then(parse_date);
+    let schema_vs_visible_severity = match (schema_date, visible_date) {
+        (Some(schema), Some(visible)) => {
+            let gap = (schema - visible).num_days();
+            if gap > 180 {
+                MismatchSeverity::Severe
+            } else if gap > 30 {
+                MismatchSeverity::Mild
+            } else {
+                MismatchSeverity::None
+            }
         }
-        _ => false,
+        (Some(_), None) if date_modified.is_some() => {
+            if body_text.split_whitespace().count() >= 400 {
+                MismatchSeverity::Severe
+            } else {
+                MismatchSeverity::None
+            }
+        }
+        _ => MismatchSeverity::None,
     };
+    let schema_vs_visible_mismatch =
+        !matches!(schema_vs_visible_severity, MismatchSeverity::None);
 
     Freshness {
         date_modified,
@@ -118,6 +146,7 @@ pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshne
         time_datetime,
         visible_updated_label,
         schema_vs_visible_mismatch,
+        schema_vs_visible_severity,
     }
 }
 
