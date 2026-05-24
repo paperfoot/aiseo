@@ -1,7 +1,7 @@
-//! Position-bias analysis. 2026 measurements (iPullRank, AIBoost) put ~44%
-//! of AI-search citations on the first ~30% of a page. Flag when high-leverage
-//! signals — TL;DR, first statistic, first credential mention — sit below
-//! that mark.
+//! Position-bias analysis. Zyppy's 2025 study (promoted by iPullRank) found
+//! ~44% of ChatGPT citations sit in the first ~30% of a page. Flag when
+//! high-leverage signals — TL;DR, first statistic, first credential mention
+//! — sit below that mark.
 
 use once_cell::sync::Lazy;
 use regex::Regex;

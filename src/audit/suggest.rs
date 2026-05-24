@@ -1,8 +1,8 @@
 //! Convert raw findings into a flat list of actionable suggestions plus a
-//! 0-100 score. The score is intentionally rough — agents care about the
-//! suggestion list, humans want a quick gut number.
+//! 0-100 score. Agents read the `suggestions` array; humans want a quick
+//! gut number.
 
-use super::{ContentStructure, Freshness, Meta, OpenGraph, PositionBias};
+use super::{AiSlop, ContentStructure, Freshness, Meta, OpenGraph, PositionBias};
 use serde::Serialize;
 
 /// Per-component deduction. Agents read this to know *which* axis to fix
@@ -38,7 +38,7 @@ pub fn build(
             t.chars().count()
         )),
         Some(t) if t.chars().count() > 70 => out.push(format!(
-            "Title is {} chars. Search engines truncate past 60.",
+            "Title is {} chars. Mobile snippets truncate around 70.",
             t.chars().count()
         )),
         _ => {}
@@ -63,6 +63,9 @@ pub fn build(
     if og.image.is_none() {
         out.push("og:image absent. 1200×630.".into());
     }
+    if meta.canonical.is_none() {
+        out.push("Canonical link absent. AI retrieval dedupes via canonical.".into());
+    }
 
     // ── Content structure ────────────────────────────────────────────────────
     if content.h1.is_empty() {
@@ -79,26 +82,41 @@ pub fn build(
             content.h2.len()
         ));
     }
-    if content.word_count < 300 {
+    if content.word_count >= 200 && content.word_count < 300 {
+        out.push(format!(
+            "Body is {} words. Past 300 starts being competitive on AI Mode.",
+            content.word_count
+        ));
+    } else if content.word_count >= 300 && content.word_count < 800 {
         out.push(format!(
             "Body is {} words. 800..1500 tends to win on comprehensiveness.",
             content.word_count
         ));
     }
-    if !content.has_tldr {
+    // TL;DR suggestion only makes sense for pages long enough to need one.
+    if !content.has_tldr && content.word_count >= 150 {
         out.push("No TL;DR. 40..60 words in the first 10%.".into());
     }
-    if !content.has_credentials && content.has_author {
+    if !content.has_credentials && content.has_author && is_english(content) {
         out.push("Author has no credentials. MD, PhD, MSc lift ChatGPT and Claude citation.".into());
+    }
+    if content.missing_alt_count > 0 {
+        out.push(format!(
+            "{} images missing alt text. Multimodal AI search reads alt.",
+            content.missing_alt_count
+        ));
+    }
+    if content.html_lang.is_none() {
+        out.push("`<html lang>` absent. Multilingual AI retrieval relies on it.".into());
     }
 
     // ── Schema ───────────────────────────────────────────────────────────────
     if schema_types.is_empty() {
-        out.push("No JSON-LD. At minimum: Article + Organization. FAQ for question pages.".into());
+        out.push("No JSON-LD. Article + Organization at minimum; FAQ for question pages.".into());
     }
 
     // ── Freshness ────────────────────────────────────────────────────────────
-    if fresh.date_modified.is_none() {
+    if fresh.date_modified.is_none() && is_article(schema_types) {
         out.push("dateModified absent. Perplexity weights freshness.".into());
     } else if let Some(days) = fresh.days_since_modified
         && days > 90
@@ -115,14 +133,30 @@ pub fn build(
     out
 }
 
-/// Single source of truth for scoring. Both `score()` (which returns just
-/// the total) and `score_breakdown()` (which returns per-component
-/// deductions) call this — keeps them from drifting.
+fn is_article(schema_types: &[String]) -> bool {
+    schema_types.iter().any(|t| {
+        matches!(
+            t.as_str(),
+            "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle" | "TechArticle"
+        )
+    })
+}
+
+fn is_english(content: &ContentStructure) -> bool {
+    match &content.html_lang {
+        Some(l) => l.starts_with("en"),
+        None => true, // unknown → assume English (matches existing default)
+    }
+}
+
+/// Single source of truth for scoring. `score_breakdown` builds on top.
 fn deductions(
     meta: &Meta,
     og: &OpenGraph,
     content: &ContentStructure,
+    pos: &PositionBias,
     fresh: &Freshness,
+    ai_slop: &AiSlop,
     schema_types: &[String],
 ) -> Vec<ScoreComponent> {
     let mut out: Vec<ScoreComponent> = Vec::new();
@@ -175,26 +209,76 @@ fn deductions(
             reason: "Body under 300 words",
         });
     }
-    if !content.has_tldr {
+    if !content.has_tldr && content.word_count >= 150 {
         out.push(ScoreComponent {
             name: "tldr",
             deducted: 5,
             reason: "No TL;DR detected",
         });
     }
+    // Schema deduction dropped from 15 -> 5 per Ahrefs Apr 2026 study
+    // (1,885 pages, +2.4% AI Mode citation lift = noise).
     if schema_types.is_empty() {
         out.push(ScoreComponent {
             name: "schema",
-            deducted: 15,
+            deducted: 5,
             reason: "No JSON-LD schema",
         });
     }
-    if fresh.date_modified.is_none() {
+    if fresh.date_modified.is_none() && is_article(schema_types) {
         out.push(ScoreComponent {
             name: "date_modified",
             deducted: 5,
-            reason: "Missing dateModified",
+            reason: "Missing dateModified on Article",
         });
+    } else if let Some(days) = fresh.days_since_modified
+        && days > 180
+    {
+        out.push(ScoreComponent {
+            name: "staleness",
+            deducted: 5,
+            reason: "Content >180 days old",
+        });
+    }
+    // Position bias now affects the score — was suggestion-only in v0.3.
+    if let Some(p) = pos.tldr_position_pct
+        && p > 10.0
+    {
+        out.push(ScoreComponent {
+            name: "tldr_position",
+            deducted: 5,
+            reason: "TL;DR past first 10% of body",
+        });
+    }
+    if let Some(p) = pos.first_stat_position_pct
+        && p > 30.0
+    {
+        out.push(ScoreComponent {
+            name: "first_stat_position",
+            deducted: 5,
+            reason: "First statistic past first 30% of body",
+        });
+    }
+    if content.missing_alt_count > 0 {
+        out.push(ScoreComponent {
+            name: "img_alt",
+            deducted: 5,
+            reason: "Images missing alt text",
+        });
+    }
+    // AI-slop bites the score when the verdict is bad.
+    match ai_slop.verdict {
+        "suspicious" => out.push(ScoreComponent {
+            name: "ai_slop",
+            deducted: 5,
+            reason: "AI-writing fingerprint suspicious",
+        }),
+        "likely_ai" => out.push(ScoreComponent {
+            name: "ai_slop",
+            deducted: 15,
+            reason: "AI-writing fingerprint heavy",
+        }),
+        _ => {}
     }
     out
 }
@@ -203,13 +287,13 @@ pub fn score_breakdown(
     meta: &Meta,
     og: &OpenGraph,
     content: &ContentStructure,
+    pos: &PositionBias,
     fresh: &Freshness,
+    ai_slop: &AiSlop,
     schema_types: &[String],
 ) -> ScoreBreakdown {
-    let components = deductions(meta, og, content, fresh, schema_types);
+    let components = deductions(meta, og, content, pos, fresh, ai_slop, schema_types);
     let total_deducted: u32 = components.iter().map(|c| c.deducted).sum();
     let total = 100u32.saturating_sub(total_deducted);
     ScoreBreakdown { total, components }
 }
-
-

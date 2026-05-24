@@ -57,7 +57,9 @@ pub fn extract(body_text: &str) -> Evidence {
 
     for m in CLAIM_INTRO.find_iter(body_text) {
         let claim_start = m.start();
-        let window_end = (claim_start + 200).min(body_text.len());
+        // 400-char lookahead covers most paragraph-level citation placements;
+        // 200 was over-flagging well-cited content per the v0.3 code review.
+        let window_end = (claim_start + 400).min(body_text.len());
         let window = &body_text[claim_start..window_end];
 
         if CITATION_MARKER.is_match(window) {

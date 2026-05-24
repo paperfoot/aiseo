@@ -50,13 +50,14 @@ pub fn run() {
                     "open_graph": "{ title, description, image, url, type }",
                     "twitter_card": "{ card, title, description, image }",
                     "schema_types": "[\"Article\", \"FAQPage\", ...]",
-                    "content": "{ word_count, h1[], h2[], h3[], has_tldr, has_faq, has_author, has_credentials }",
+                    "content": "{ word_count, h1[], h2[], h3[], has_tldr, has_faq, has_author, has_credentials, image_count, missing_alt_count, html_lang }",
                     "keywords": "{ primary: [{ term, count }], questions: [string], density: { term: pct } }",
                     "entities": "{ people: [{ name, credentials? }], organizations: [string] }",
                     "evidence": "{ stat_count, quote_count, unsupported_claims: [{ snippet, position_pct }] }",
                     "voice": "{ featured_snippet_candidate: string|null, speakable_eligible: bool, avg_sentence_words }",
                     "position_bias": "{ total_words, tldr_position_pct, first_stat_position_pct, first_credential_position_pct, warnings[] }",
                     "freshness": "{ date_modified, date_published, days_since_modified, year_mentions[], current_year }",
+                    "ai_slop": "{ signals: [{ kind, confidence, snippet, position_pct }], density_per_1000_words, verdict: 'clean' | 'suspicious' | 'likely_ai' }",
                     "suggestions": "[string, ...]"
                 }
             },

@@ -7,6 +7,7 @@
 use serde::Serialize;
 use std::path::Path;
 
+mod ai_slop;
 mod content;
 mod entities;
 mod evidence;
@@ -19,6 +20,7 @@ pub mod report;
 mod suggest;
 mod voice;
 
+pub use ai_slop::AiSlop;
 pub use content::ContentStructure;
 pub use entities::Entities;
 pub use evidence::Evidence;
@@ -44,6 +46,7 @@ pub struct AuditReport {
     pub voice: Voice,
     pub position_bias: PositionBias,
     pub freshness: Freshness,
+    pub ai_slop: AiSlop,
     pub score: u32,
     pub score_breakdown: ScoreBreakdown,
     pub suggestions: Vec<String>,
@@ -135,9 +138,28 @@ pub fn audit_content(
     let entities = entities::extract(&content.body_text);
     let evidence = evidence::extract(&content.body_text);
     let voice = voice::extract(&content.body_text, &schema_types, &html_like);
+    let ai_slop = ai_slop::extract(&content.body_text);
 
-    let suggestions = suggest::build(&meta, &og, &content, &position_bias, &freshness, &schema_types);
-    let score_breakdown = suggest::score_breakdown(&meta, &og, &content, &freshness, &schema_types);
+    let mut suggestions = suggest::build(
+        &meta,
+        &og,
+        &content,
+        &position_bias,
+        &freshness,
+        &schema_types,
+    );
+    if let Some(s) = ai_slop::suggestion(&ai_slop) {
+        suggestions.push(s);
+    }
+    let score_breakdown = suggest::score_breakdown(
+        &meta,
+        &og,
+        &content,
+        &position_bias,
+        &freshness,
+        &ai_slop,
+        &schema_types,
+    );
     let score = score_breakdown.total;
 
     Ok(AuditReport {
@@ -154,6 +176,7 @@ pub fn audit_content(
         voice,
         position_bias,
         freshness,
+        ai_slop,
         score,
         score_breakdown,
         suggestions,

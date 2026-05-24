@@ -25,6 +25,7 @@ struct AuditEnvelope {
     voice: audit::Voice,
     position_bias: audit::PositionBias,
     freshness: audit::Freshness,
+    ai_slop: audit::AiSlop,
     suggestions: Vec<String>,
 }
 
@@ -111,6 +112,7 @@ pub fn run(
         voice: report.voice,
         position_bias: report.position_bias,
         freshness: report.freshness,
+        ai_slop: report.ai_slop,
         suggestions: report.suggestions,
     };
 

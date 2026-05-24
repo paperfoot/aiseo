@@ -149,7 +149,7 @@ const AUDIT_HELP: &str = "\
 TIPS:
   • Pipe to `jq` for filtering: `aiseo audit page.html | jq '.suggestions'`
   • Score is rough and weighted toward AI-citation surfaces, not legacy SEO
-  • Position bias warnings trigger when TL;DR / first stat sit past 30% of body
+  • Position bias warns when TL;DR sits past the first 10% or first statistic past the first 30% of body
   • Use --fail-under in CI: `aiseo audit page.html --fail-under 80` exits 1 if score < 80
   • Read `score_breakdown.components[]` to know *which* deduction to fix next
 
