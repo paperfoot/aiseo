@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+pub use crate::commands::schema::SchemaType;
+
 const LONG_ABOUT: &str = "\
 Agent-first CLI for SEO, GEO (generative engine optimisation), and AEO
 (answer engine optimisation) audits.
@@ -36,6 +38,13 @@ pub enum Commands {
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
     },
+    /// Generate a JSON-LD block for a given schema.org type. Output is
+    /// ready to paste into a `<script type="application/ld+json">` block.
+    #[command(after_long_help = SCHEMA_HELP)]
+    Schema {
+        #[command(subcommand)]
+        kind: SchemaType,
+    },
     /// Machine-readable capability manifest
     #[command(visible_alias = "info")]
     AgentInfo,
@@ -62,6 +71,14 @@ pub enum Commands {
         code: i32,
     },
 }
+
+const SCHEMA_HELP: &str = "\
+EXAMPLES:
+  aiseo schema faq --qa 'What is GEO?::Generative Engine Optimisation.' --qa 'Why?::Citations.'
+  aiseo schema article --title 'Optimal LDL in 2026' --description '...' --date-published 2026-05-24 --author 'Dr Jane Smith' --credentials MD
+  aiseo schema howto --name 'Lower LDL' --step 'See your GP' --step 'Start a statin' --step 'Re-test in 6 weeks'
+  aiseo schema organization --name '199 Biotechnologies' --url https://199.bio --logo https://199.bio/logo.png
+  aiseo schema person --name 'Boris Djordjevic' --job-title 'Founder' --credentials MSc --url https://x.com/longevityboris";
 
 const AUDIT_HELP: &str = "\
 TIPS:

@@ -49,6 +49,7 @@ fn main() {
 
     let result = match cli.command {
         Commands::Audit { file, fail_under } => commands::audit::run(ctx, file, fail_under),
+        Commands::Schema { kind } => commands::schema::run(ctx, kind),
         Commands::AgentInfo => {
             commands::agent_info::run();
             Ok(())

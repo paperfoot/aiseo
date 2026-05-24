@@ -48,6 +48,20 @@ pub fn run() {
                     "suggestions": "[string, ...]"
                 }
             },
+            "schema": {
+                "description": "Generate a JSON-LD block for a given schema.org type. Output is ready to paste into a <script type=\"application/ld+json\"> block.",
+                "subcommands": {
+                    "faq":          "--qa 'QUESTION::ANSWER' (repeatable, ≥1)",
+                    "article":      "--title --description --date-published --author [--credentials --author-url --org-name --org-url --url --image --date-modified]",
+                    "howto":        "--name --step ... [--description]",
+                    "organization": "--name [--url --logo --same-as URL]",
+                    "person":       "--name [--job-title --credentials --url --works-for]"
+                },
+                "output_shape": {
+                    "schema_type": "FAQPage | Article | HowTo | Organization | Person",
+                    "json_ld":     "valid JSON-LD object with @context and @type"
+                }
+            },
             "agent-info": {
                 "description": "This manifest",
                 "aliases": ["info"],
