@@ -20,8 +20,25 @@ fn fixture() -> tempfile::NamedTempFile {
 }
 
 fn config_dir_in(tmp: &std::path::Path) -> std::path::PathBuf {
-    tmp.join("Library/Application Support")
-        .join(env!("CARGO_PKG_NAME"))
+    #[cfg(target_os = "macos")]
+    {
+        tmp.join("Library/Application Support")
+            .join(env!("CARGO_PKG_NAME"))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        tmp.join(".config").join(env!("CARGO_PKG_NAME"))
+    }
+}
+
+fn with_temp_config_home(mut cmd: Command, tmp: &std::path::Path) -> Command {
+    cmd.env("HOME", tmp);
+
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("XDG_CONFIG_HOME", tmp.join(".config"));
+
+    cmd
 }
 
 // ── Malformed config resilience ────────────────────────────────────────────
@@ -34,8 +51,7 @@ fn agent_info_works_with_malformed_config() {
     std::fs::create_dir_all(&config_dir).unwrap();
     std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
 
-    bin()
-        .env("HOME", tmp.path())
+    with_temp_config_home(bin(), tmp.path())
         .arg("agent-info")
         .assert()
         .code(0);
@@ -49,8 +65,7 @@ fn config_path_works_with_malformed_config() {
     std::fs::create_dir_all(&config_dir).unwrap();
     std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
 
-    bin()
-        .env("HOME", tmp.path())
+    with_temp_config_home(bin(), tmp.path())
         .args(["config", "path"])
         .assert()
         .code(0);
@@ -64,8 +79,7 @@ fn config_show_fails_with_malformed_config() {
     std::fs::create_dir_all(&config_dir).unwrap();
     std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
 
-    bin()
-        .env("HOME", tmp.path())
+    with_temp_config_home(bin(), tmp.path())
         .args(["config", "show"])
         .assert()
         .code(2);
