@@ -22,22 +22,53 @@ This writes a small `SKILL.md` into `~/.claude/skills/aiseo/`, `~/.codex/skills/
 
 ## Use
 
+Four user commands:
+
 ```bash
-aiseo audit page.html                  # full audit, coloured TTY output
-aiseo audit page.html | jq             # JSON envelope when piped
-aiseo audit post.md | jq '.suggestions'
-aiseo audit page.html --json > audit.json
+aiseo audit page.html                       # full audit of a local file
+aiseo audit page.html --fail-under 80       # CI gate: exit 1 if score < 80
+aiseo audit page.html --out audit.sarif     # GitHub Code Scanning
+aiseo audit page.html --out audit.md        # committable Markdown report
+aiseo audit page.html --factors meta,og     # only show meta+OG suggestions
+
+aiseo fetch https://example.com             # audit a live URL
+aiseo fetch https://example.com --fail-under 75 --out audit.sarif
+
+aiseo schema faq --qa 'What is GEO?::Generative Engine Optimisation.'
+aiseo schema article --title '...' --description '...' --date-published 2026-05-24 --author 'Dr Jane Smith' --credentials MD
+aiseo schema howto --name 'Lower LDL' --step 'See your GP' --step 'Start a statin'
+aiseo schema organization --name '199 Bio' --url https://199.bio
+aiseo schema person --name 'Boris Djordjevic' --job-title 'Founder'
+
+aiseo agent-info                            # full machine-readable manifest
+aiseo skill install                         # drop a tiny SKILL.md into ~/.claude/skills/aiseo/
 ```
 
-What `audit` returns:
+### What `audit` returns
+
+A single typed JSON envelope. Agents read sub-objects directly; humans read the suggestion list.
+
 - `meta` — `<title>`, description, keywords, author, canonical
 - `open_graph`, `twitter_card` — social preview surfaces
 - `schema_types` — every `@type` found in JSON-LD blocks (e.g. `["Article", "FAQPage"]`)
-- `content` — H1/H2/H3 lists, word count, presence flags (TL;DR, FAQ, author, credentials)
-- `position_bias` — word-offset percentage of TL;DR / first stat / first credential, with warnings when the high-leverage signals sit past the first 30% of the page
+- `content` — H1/H2/H3 lists, word count, presence flags
+- **`keywords`** — `{ primary[], questions[], density{} }`
+- **`entities`** — `{ people[{name, credentials?}], organizations[] }`
+- **`evidence`** — `{ stat_count, quote_count, unsupported_claims[] }`
+- **`voice`** — `{ featured_snippet_candidate, speakable_eligible, avg_sentence_words }`
+- `position_bias` — word-offset percentages of TL;DR / first stat / first credential, with warnings when high-leverage signals sit past the first 30% of the page
 - `freshness` — `dateModified`, `datePublished`, days since last modification, year mentions
 - `score` — rough 0–100, weighted toward AI-citation surface
+- **`score_breakdown`** — per-component deductions: `{ name, deducted, reason }[]`
 - `suggestions` — flat list of concrete next actions
+
+### Output formats
+
+| `--out` extension | What you get | Use case |
+|---|---|---|
+| `.json` | Pretty JSON envelope | Programmatic, default |
+| `.md` | Markdown report | Commit into a repo |
+| `.sarif` | SARIF 2.1.0 | GitHub Code Scanning annotations |
 
 ## Why this exists
 
