@@ -12,18 +12,29 @@ fn skill_content() -> String {
     format!(
         r#"---
 name: {name}
-description: Agent-first SEO / GEO / AEO auditor. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", or mentions SEO, GEO, AEO, AI search optimisation, or generative engine optimisation. Do NOT use for image optimisation or server performance.
+description: Agent-first SEO / GEO / AEO auditor. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", "generate JSON-LD", "audit a live URL", or mentions SEO, GEO, AEO, AI search optimisation, generative engine optimisation, schema.org, or rich results. Do NOT use for image optimisation or server performance.
 ---
 
 # {name}
 
-Run `{name} agent-info` for the full capability manifest, then call the
-right subcommand. The binary is the documentation. Pipe to `jq` to filter.
+Run `{name} agent-info` for the full capability manifest, flags, exit
+codes, and output shapes. The binary is the documentation.
 
 ```
-{name} audit <file>     # full audit of an HTML or Markdown file
-{name} agent-info       # machine-readable capability manifest
+{name} audit <file>           # audit a local HTML or Markdown file
+{name} fetch <url>            # fetch a live URL, then audit
+{name} schema <type> ...      # generate JSON-LD (faq, article, howto, organization, person)
 ```
+
+Useful flags on `audit` / `fetch`:
+
+  --fail-under N      exit 1 if score below N (CI gate)
+  --out <path>        write report; format auto-detected from extension
+                      (.json, .md, .sarif for GitHub Code Scanning)
+  --factors <list>    filter output to comma-separated factors
+                      (meta, og, content, schema, freshness, position)
+
+All commands emit a JSON envelope when piped. Pipe to `jq` to filter.
 "#
     )
 }
