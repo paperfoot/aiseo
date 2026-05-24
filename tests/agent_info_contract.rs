@@ -91,12 +91,25 @@ fn skill_status_is_routable() {
 
 #[test]
 fn config_show_is_routable() {
-    bin().args(["config", "show"]).assert().code(0);
+    // Isolate HOME/XDG_CONFIG_HOME so a developer's malformed local
+    // config can't fail an unrelated routability test. (Same lesson as
+    // robustness.rs — see v0.7.2 fix.)
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = bin();
+    cmd.env("HOME", tmp.path());
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
+    cmd.args(["config", "show"]).assert().code(0);
 }
 
 #[test]
 fn config_path_is_routable() {
-    bin().args(["config", "path"]).assert().code(0);
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = bin();
+    cmd.env("HOME", tmp.path());
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
+    cmd.args(["config", "path"]).assert().code(0);
 }
 
 #[test]

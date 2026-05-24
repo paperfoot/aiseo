@@ -137,6 +137,44 @@ fn quiet_still_emits_json() {
     assert_eq!(json["status"], "success");
 }
 
+// ── Manifest ↔ audit output parity ─────────────────────────────────────────
+
+/// Every key the manifest claims `audit` returns must actually appear in
+/// the real audit output. Catches the v0.7.0 drift where `performance`
+/// and `link_graph` were added without updating agent-info / README.
+#[test]
+fn agent_info_audit_keys_match_real_output() {
+    let info_out = bin().arg("agent-info").output().unwrap();
+    let info: serde_json::Value = serde_json::from_slice(&info_out.stdout).unwrap();
+    let manifest_keys: Vec<&str> = info["commands"]["audit"]["output_shape"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|s| s.as_str())
+        .collect();
+
+    let f = fixture();
+    let audit_out = bin()
+        .args(["audit", f.path().to_str().unwrap()])
+        .output()
+        .unwrap();
+    let audit: serde_json::Value = serde_json::from_slice(&audit_out.stdout).unwrap();
+    let data = audit["data"].as_object().expect("envelope.data");
+
+    for key in &manifest_keys {
+        assert!(
+            data.contains_key(*key),
+            "agent-info advertises `{key}` but real audit output is missing it"
+        );
+    }
+    for key in data.keys() {
+        assert!(
+            manifest_keys.contains(&key.as_str()),
+            "audit output has `{key}` but agent-info doesn't document it"
+        );
+    }
+}
+
 // ── Parse error envelope ───────────────────────────────────────────────────
 
 #[test]

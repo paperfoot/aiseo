@@ -110,8 +110,7 @@ pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshne
     let visible_date = time_datetime.as_deref().and_then(parse_date).or_else(|| {
         visible_updated_label
             .as_deref()
-            .and_then(extract_year_from_label)
-            .and_then(|y| NaiveDate::from_ymd_opt(y as i32, 1, 1))
+            .and_then(parse_visible_label_date)
     });
     let schema_date = date_modified.as_deref().and_then(parse_date);
     let schema_vs_visible_severity = match (schema_date, visible_date) {
@@ -150,11 +149,50 @@ pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshne
     }
 }
 
-fn extract_year_from_label(label: &str) -> Option<u16> {
+/// Parse the date portion of a visible "Updated <date>" label.
+///
+/// Previously this only extracted the year and treated it as January 1,
+/// so `Updated Dec 30 2026` vs schema `2026-12-31` showed a 364-day gap
+/// and got flagged as `Severe` when the real gap is 1 day. We now try
+/// the common visible-date shapes before falling back to year-only.
+fn parse_visible_label_date(label: &str) -> Option<NaiveDate> {
+    // The capture from VISIBLE_DATE_LABEL_RE group 1 is the date string
+    // without the leading "Updated" / "Modified" / etc. Re-run on the
+    // already-matched label to get group 1.
+    let date_str = VISIBLE_DATE_LABEL_RE
+        .captures(label)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .unwrap_or_else(|| label.to_string());
+
+    // Try the common shapes the regex admits. Order matters only for
+    // ambiguous separators (M/D/Y vs D/M/Y) — we try US first since
+    // most English-language pages use it, then European.
+    let formats = [
+        "%Y-%m-%d",      // 2026-12-31
+        "%d %b %Y",      // 30 Dec 2026
+        "%d %B %Y",      // 30 December 2026
+        "%b %d %Y",      // Dec 30 2026
+        "%B %d %Y",      // December 30 2026
+        "%b %d, %Y",     // Dec 30, 2026
+        "%B %d, %Y",     // December 30, 2026
+        "%m/%d/%Y",      // 12/31/2026
+        "%d/%m/%Y",      // 31/12/2026
+        "%m/%d/%y",      // 12/31/26
+        "%d/%m/%y",      // 31/12/26
+    ];
+    for fmt in &formats {
+        if let Ok(d) = NaiveDate::parse_from_str(&date_str, fmt) {
+            return Some(d);
+        }
+    }
+
+    // Fallback: year-only label like "Updated 2026" — keep the old
+    // behaviour so we don't lose existing signal.
     YEAR_RE
-        .find_iter(label)
-        .filter_map(|m| m.as_str().parse::<u16>().ok())
-        .max()
+        .find(&date_str)
+        .and_then(|m| m.as_str().parse::<i32>().ok())
+        .and_then(|y| NaiveDate::from_ymd_opt(y, 1, 1))
 }
 
 /// Parse a JSON-LD date value tolerantly. Handles RFC 3339 with timezone,

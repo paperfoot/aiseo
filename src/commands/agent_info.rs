@@ -56,12 +56,14 @@ pub fn run() {
                     "evidence": "{ stat_count, quote_count, unsupported_claims: [{ snippet, position_pct }] }",
                     "voice": "{ featured_snippet_candidate: string|null, speakable_eligible: bool, avg_sentence_words }",
                     "position_bias": "{ total_words, tldr_position_pct, first_stat_position_pct, first_credential_position_pct, warnings[] }",
-                    "freshness": "{ date_modified, date_published, days_since_modified, year_mentions[], current_year }",
+                    "freshness": "{ date_modified, date_published, days_since_modified, year_mentions[], current_year, time_datetime, visible_updated_label, schema_vs_visible_mismatch, schema_vs_visible_severity: 'none'|'mild'|'severe' }",
                     "ai_slop": "{ signals: [{ kind, confidence, snippet, position_pct }], density_per_1000_words, verdict: 'clean' | 'suspicious' | 'likely_ai' }",
                     "information_gain": "{ score: 0..10, counts: { named_quotes, sample_sizes, yoy_deltas, first_person_evidence, method_disclosure, numbered_citations }, samples[] }",
                     "metatext": "{ signals: [{ kind, confidence, snippet, position_pct }], heading_skeleton: { jaccard, matched[] }, weighted_score_per_1000_words, verdict: 'clean' | 'suspicious' | 'metatext_heavy' }",
-                    "copy_precision": "{ score: 0..10, counts, densities, verdict: 'tight' | 'mid' | 'padded' }",
+                    "copy_precision": "{ score: 0..10, counts, densities, verdict: 'tight' | 'mid' | 'padded' | 'insufficient_content' }",
                     "design_slop": "{ findings: [{ id, snippet }], counts: { rule_id: count }, verdict: 'clean' | 'minor' | 'suspicious' | 'heavy' }",
+                    "performance": "{ inline_style_bytes, inline_script_bytes, external_stylesheets, external_scripts, render_blocking_estimate, lazy_loaded_images, eager_below_fold_estimate, font_links }",
+                    "link_graph": "{ internal_count, external_count, authority_external, broken_anchors[], nofollow_external_pct }",
                     "suggestions": "[string, ...]"
                 }
             },
@@ -124,8 +126,8 @@ pub fn run() {
                     }
                 ],
                 "output_shape": {
-                    "fetched": "{ url, status, content_type, bytes, fetched_at }",
-                    "...": "all `audit` fields (file, score, meta, content, keywords, entities, evidence, voice, position_bias, freshness, suggestions)"
+                    "fetched": "{ url, status, content_type, bytes, fetched_at, x_robots_tag, content_encoding, cache_control }",
+                    "...": "all `audit` fields (file, score, meta, content, keywords, entities, evidence, voice, position_bias, freshness, performance, link_graph, suggestions)"
                 }
             },
             "schema": {

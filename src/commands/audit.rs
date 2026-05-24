@@ -69,10 +69,10 @@ pub fn run(
         let mut raw = String::new();
         std::io::stdin()
             .read_to_string(&mut raw)
-            .map_err(AppError::Io)?;
+            .map_err(|e| classify_read_error(e, "<stdin>"))?;
         let ctype = ContentType::sniff(&raw);
         audit::audit_content(raw, ctype, "<stdin>".to_string()).map_err(|e| match e {
-            AuditError::Io(e) => AppError::Io(e),
+            AuditError::Io(e) => classify_read_error(e, "<stdin>"),
             AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
             AuditError::UnsupportedType(t) => {
                 AppError::InvalidInput(format!("unsupported content: {t}"))
@@ -84,7 +84,7 @@ pub fn run(
             AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
                 "unsupported file type: .{t} (expected .html, .htm, .md, .mdx, or `-` for stdin)"
             )),
-            AuditError::Io(e) => AppError::Io(e),
+            AuditError::Io(e) => classify_read_error(e, &path.display().to_string()),
         })?
     };
 
@@ -205,6 +205,21 @@ pub fn run(
     }
 
     Ok(())
+}
+
+/// Distinguish "input isn't usable" from "system I/O glitch". UTF-8 decode
+/// failures on the input file are bad input (exit 3), not a transient
+/// retry-the-command condition (exit 1). The old code lumped both into
+/// `AppError::Io` and the agent got "Retry the command" — useless advice
+/// for binary input.
+fn classify_read_error(err: std::io::Error, source: &str) -> AppError {
+    if err.kind() == std::io::ErrorKind::InvalidData {
+        AppError::InvalidInput(format!(
+            "{source} is not valid UTF-8 (expected HTML or Markdown text)"
+        ))
+    } else {
+        AppError::Io(err)
+    }
 }
 
 fn score_colour(score: u32) -> String {

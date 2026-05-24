@@ -82,7 +82,22 @@ fn count_ly_excluding(text: &str) -> usize {
 
 pub fn extract(body_text: &str) -> CopyPrecision {
     let words: Vec<&str> = body_text.split_whitespace().collect();
-    let word_count = words.len().max(1);
+
+    // Below this threshold the density math degenerates: zero filler in an
+    // empty body trivially yields `score: 10, verdict: tight`, which is a
+    // lie. Bail out with an honest verdict instead.
+    if words.len() < 20 {
+        let mut counts: HashMap<&'static str, usize> = HashMap::new();
+        counts.insert("words", words.len());
+        return CopyPrecision {
+            score: 0.0,
+            counts,
+            densities: HashMap::new(),
+            verdict: "insufficient_content",
+        };
+    }
+
+    let word_count = words.len();
     let per_1k = |n: usize| -> f32 { (n as f32 * 1000.0 / word_count as f32 * 10.0).round() / 10.0 };
 
     let filler = FILLER_WORDS.find_iter(body_text).count();
@@ -234,7 +249,7 @@ pub fn extract(body_text: &str) -> CopyPrecision {
 
 pub fn suggestion(cp: &CopyPrecision) -> Option<String> {
     match cp.verdict {
-        "tight" => None,
+        "tight" | "insufficient_content" => None,
         "mid" => Some(format!(
             "Copy precision {:.1}/10 (mid). Cut filler words and empty-emphasis adjectives; favour concrete nouns and numbers.",
             cp.score

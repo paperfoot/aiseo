@@ -71,12 +71,22 @@ fn agent_info_exits_0() {
 
 #[test]
 fn config_path_exits_0() {
-    bin().args(["config", "path"]).assert().code(0);
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = bin();
+    cmd.env("HOME", tmp.path());
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
+    cmd.args(["config", "path"]).assert().code(0);
 }
 
 #[test]
 fn config_show_exits_0() {
-    bin().args(["config", "show"]).assert().code(0);
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = bin();
+    cmd.env("HOME", tmp.path());
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
+    cmd.args(["config", "show"]).assert().code(0);
 }
 
 #[test]
