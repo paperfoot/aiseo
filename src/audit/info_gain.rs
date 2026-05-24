@@ -11,7 +11,7 @@
 //! 0–2 unique signals reads as rewritten content; 5–7 competes; 8+ leads.
 //! Score is a 0–10 integer surfaced on every audit.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
@@ -51,7 +51,7 @@ pub struct Sample {
     pub snippet: String,
 }
 
-static NAMED_QUOTE: Lazy<Regex> = Lazy::new(|| {
+static NAMED_QUOTE: LazyLock<Regex> = LazyLock::new(|| {
     // Curly or straight quotes of ≥20 chars, followed by an em-dash /
     // hyphen attribution OR a `(Name, source)` style attribution.
     Regex::new(
@@ -60,21 +60,21 @@ static NAMED_QUOTE: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static SAMPLE_SIZE: Lazy<Regex> = Lazy::new(|| {
+static SAMPLE_SIZE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(n\s*=\s*\d+|\d+(?:,\d{3})*\s+(patients?|participants?|respondents?|samples?|subjects?|stores?|customers?|transactions?|users?|companies|firms))\b",
     )
     .unwrap()
 });
 
-static YOY_DELTA: Lazy<Regex> = Lazy::new(|| {
+static YOY_DELTA: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(up|down|rose|fell|grew|declined|increased|decreased)\s+(by\s+)?\d+(\.\d+)?\s*(%|percentage\s+points?|pp)\s+(from|since|vs\.?|versus|compared\s+to|year[-\s]over[-\s]year|YoY)\b",
     )
     .unwrap()
 });
 
-static FIRST_PERSON_EVIDENCE: Lazy<Regex> = Lazy::new(|| {
+static FIRST_PERSON_EVIDENCE: LazyLock<Regex> = LazyLock::new(|| {
     // First-person evidence patterns. Two tiers:
     //   - hard evidence verbs: analysed, measured, tested, surveyed,
     //     ran, conducted, sampled, interviewed, observed, sequenced,
@@ -91,15 +91,15 @@ static FIRST_PERSON_EVIDENCE: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static METHOD_DISCLOSURE: Lazy<Regex> = Lazy::new(|| {
+static METHOD_DISCLOSURE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(methodology|inclusion\s+criteria|exclusion\s+criteria|study\s+design|sample\s+size|control\s+group|double[-\s]blind|randomi[sz]ed|cross[-\s]sectional)\b",
     )
     .unwrap()
 });
 
-static NUMBERED_CITATION: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\[\d{1,3}\]").unwrap());
+static NUMBERED_CITATION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[\d{1,3}\]").unwrap());
 
 pub fn extract(body_text: &str) -> InformationGain {
     let named_quotes = NAMED_QUOTE.find_iter(body_text).count();

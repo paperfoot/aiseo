@@ -14,7 +14,7 @@
 //!   suspicious  3.0 .. 8.0
 //!   likely_ai   > 8.0
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
@@ -47,7 +47,7 @@ fn confidence_weight(c: &str) -> f64 {
     }
 }
 
-static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
+static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
     let mk = |kind, conf, p: &str| Pattern {
         kind,
         confidence: conf,

@@ -5,7 +5,7 @@
 //! capitalisation patterns. Not a NER model; intentionally crude so an
 //! agent can decide whether to trust the result.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -25,13 +25,13 @@ pub struct Person {
 }
 
 // "Dr Jane Smith", "Dr. Jane Smith", "Professor Alice Brown"
-static TITLED_NAME: Lazy<Regex> = Lazy::new(|| {
+static TITLED_NAME: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:Dr\.?|Prof\.?|Professor|Mr|Mrs|Ms|Sir|Dame)\s+([A-Z][a-zA-Z\-']+(?:\s+[A-Z][a-zA-Z\-']+){1,3})")
         .unwrap()
 });
 
 // "Jane Smith, MD" / "Alice Brown, PhD" — credentials trailing the name.
-static NAME_WITH_CRED: Lazy<Regex> = Lazy::new(|| {
+static NAME_WITH_CRED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"\b([A-Z][a-zA-Z\-']+(?:\s+[A-Z][a-zA-Z\-']+){1,3})\s*,?\s*(MD|Ph\.?D\.?|MBA|MSc|MPH|DDS|DMD|JD|RN|DO|DPM|OD|PharmD|DVM|EdD|PsyD)\b",
     )
@@ -39,7 +39,7 @@ static NAME_WITH_CRED: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Organisations: legal suffix anchored
-static ORG_LEGAL: Lazy<Regex> = Lazy::new(|| {
+static ORG_LEGAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"\b([A-Z][A-Za-z0-9&\-]+(?:\s+[A-Z][A-Za-z0-9&\-]+){0,4})\s+(Inc\.?|LLC|Ltd\.?|Limited|Co\.|Corp\.?|Corporation|Foundation|Institute|University|College|Society|Group|Holdings|Hospital|Clinic|Laboratory|Labs|Research)\b",
     )

@@ -4,7 +4,7 @@
 //! sentence detection. An agent uses `primary` to decide whether the page's
 //! actual top keyword matches the keyword the user is trying to rank for.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
@@ -43,14 +43,14 @@ static STOP_WORDS: &[&str] = &[
     "yourselves",
 ];
 
-static WORD: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b[a-zA-Z][a-zA-Z\-']{2,}\b").unwrap());
+static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[a-zA-Z][a-zA-Z\-']{2,}\b").unwrap());
 // Real questions only: a sentence ending in `?` whose first word is a
 // genuine interrogative ("What/Why/How/When/Where/Who/Which/Is/Are/Do/
 // Does/Can/Should/Will/Could/Would/May/Might"). The previous detector
 // appended `?` to any sentence starting with "what/how/is/are/can"
 // which fabricated questions out of statements; a naïve `[A-Z]…\?` regex
 // over-grabs across run-together nav text without punctuation.
-static QUESTION_SENTENCE: Lazy<Regex> = Lazy::new(|| {
+static QUESTION_SENTENCE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?m)(?:^|[.!?]\s+|\n\s*)((?:What|Why|How|When|Where|Who|Which|Is|Are|Do|Does|Can|Should|Will|Could|Would|May|Might)\b[^.!?\n]{3,180}\?)",
     )

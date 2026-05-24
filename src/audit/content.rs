@@ -1,7 +1,7 @@
 //! Content structure extraction: headings, body text, word count, and the
 //! presence flags the suggestions module reasons over.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Serialize;
@@ -71,17 +71,17 @@ pub enum NoscriptKind {
 // Credentials must follow a capitalised name within ~3 tokens — bare "OD",
 // "DO", "JD" sit in normal prose ("the DO loop", "OD optical density",
 // "JD Edwards") and false-positived the v0.3 detector.
-static CREDENTIAL_RE: Lazy<Regex> = Lazy::new(|| {
+static CREDENTIAL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"\b[A-Z][a-zA-Z\-']+(?:\s+[A-Z][a-zA-Z\-']+){0,3}\s*,?\s*(MD|Ph\.?D\.?|MBA|MSc|MPH|DDS|DMD|JD|RN|DO|DPM|OD|PharmD|DVM|EdD|PsyD)\b",
     )
     .unwrap()
 });
-static TLDR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
-static FAQ_HEADING_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)FAQ|Frequently\s+Asked\s+Questions").unwrap());
-static AUTHOR_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)author|by\s+[A-Z]|written\s+by").unwrap());
+static TLDR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
+static FAQ_HEADING_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)FAQ|Frequently\s+Asked\s+Questions").unwrap());
+static AUTHOR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)author|by\s+[A-Z]|written\s+by").unwrap());
 
 pub fn extract(doc: &Html) -> ContentStructure {
     let body_text = extract_body_text(doc);
@@ -151,7 +151,7 @@ fn analyze_heading_quality(headings: &[HeadingOrderEntry]) -> (usize, usize) {
     (empty, duplicates)
 }
 
-static QUOTABLE_SPLIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]+\s+").unwrap());
+static QUOTABLE_SPLIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?]+\s+").unwrap());
 
 fn count_quotable_sentences(body_text: &str) -> usize {
     QUOTABLE_SPLIT

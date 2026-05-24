@@ -7,18 +7,18 @@
 //! signals — TL;DR, first statistic, first credential mention — sit
 //! below that mark.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
-static TLDR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
-static STAT_RE: Lazy<Regex> = Lazy::new(|| {
+static TLDR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
+static STAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)(\d+(?:,\d{3})*(?:\.\d+)?)\s*(%|percent|years?|months?|patients?|people|users?|cases?)",
     )
     .unwrap()
 });
-static CREDENTIAL_RE: Lazy<Regex> = Lazy::new(|| {
+static CREDENTIAL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(MD|PhD|Ph\.D\.|M\.D\.|MBA|MSc|MPH|DDS|DMD|JD|RN|DO|DPM|OD|PharmD|DVM|EdD|PsyD)\b")
         .unwrap()
 });

@@ -7,7 +7,7 @@
 //! engines; magnitudes were measured on GPT-3.5 in 2023 and the absolute
 //! numbers do not necessarily hold today.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
@@ -25,14 +25,14 @@ pub struct UnsupportedClaim {
     pub position_pct: f64,
 }
 
-static STAT: Lazy<Regex> = Lazy::new(|| {
+static STAT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(\d+(?:,\d{3})*(?:\.\d+)?)\s*(%|percent|x|×|fold|years?|months?|days?|patients?|people|users?|cases?|million|billion)\b",
     )
     .unwrap()
 });
 
-static QUOTE: Lazy<Regex> = Lazy::new(|| {
+static QUOTE: LazyLock<Regex> = LazyLock::new(|| {
     // Straight or curly double-quoted blocks of at least 5 words.
     Regex::new(r#"["“]([^"”]{20,})["”]"#).unwrap()
 });
@@ -40,15 +40,15 @@ static QUOTE: Lazy<Regex> = Lazy::new(|| {
 // "Studies show…" "Research indicates…" "Experts agree…" — claim-shaped
 // sentences. We flag the ones that don't have a citation marker ([1], (2024),
 // or an http link) in the next ~140 chars.
-static CLAIM_INTRO: Lazy<Regex> = Lazy::new(|| {
+static CLAIM_INTRO: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(studies\s+show|research\s+(?:shows?|indicates?|suggests?|finds?)|evidence\s+suggests?|experts\s+agree|data\s+(?:shows?|indicates?)|it\s+is\s+well\s+known|widely\s+accepted)\b",
     )
     .unwrap()
 });
 
-static CITATION_MARKER: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\[\d+\]|\(\d{4}\)|https?://)").unwrap());
+static CITATION_MARKER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\[\d+\]|\(\d{4}\)|https?://)").unwrap());
 
 pub fn extract(body_text: &str) -> Evidence {
     let stat_count = STAT.find_iter(body_text).count();

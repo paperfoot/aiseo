@@ -6,7 +6,7 @@
 //! `10 - sum(penalties).clamp(0, 10)`. Verdict: `tight` ≥ 8, `mid` 5..7,
 //! `padded` < 5.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -19,15 +19,15 @@ pub struct CopyPrecision {
     pub verdict: &'static str,
 }
 
-static FILLER_WORDS: Lazy<Regex> = Lazy::new(|| {
+static FILLER_WORDS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(very|really|extremely|quite|rather|somewhat|fairly|absolutely|basically|literally|actually|essentially|simply|just|truly|obviously|clearly|definitely|certainly|particularly|specifically)\b",
     )
     .unwrap()
 });
 
-static LY_ADVERB: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\b[a-z]{4,}ly\b").unwrap());
-static LY_EXCLUDE: Lazy<std::collections::HashSet<&'static str>> = Lazy::new(|| {
+static LY_ADVERB: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b[a-z]{4,}ly\b").unwrap());
+static LY_EXCLUDE: LazyLock<std::collections::HashSet<&'static str>> = LazyLock::new(|| {
     [
         "only", "early", "daily", "weekly", "monthly", "yearly", "family",
         "really", "fully", "july", "italy",
@@ -36,42 +36,42 @@ static LY_EXCLUDE: Lazy<std::collections::HashSet<&'static str>> = Lazy::new(|| 
     .collect()
 });
 
-static HEDGED_MODALS: Lazy<Regex> = Lazy::new(|| {
+static HEDGED_MODALS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(might|could|may|should|would|perhaps|possibly|potentially|presumably|arguably)\b",
     )
     .unwrap()
 });
 
-static EMPTY_EMPHASIS_ADJ: Lazy<Regex> = Lazy::new(|| {
+static EMPTY_EMPHASIS_ADJ: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(crucial|essential|important|key|vital|critical|significant|substantial|noteworthy|remarkable|notable|paramount|pivotal)\b",
     )
     .unwrap()
 });
 
-static THROAT_CLEARING: Lazy<Regex> = Lazy::new(|| {
+static THROAT_CLEARING: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?im)^(?:in order to|it is also the case that|one of the things that|what this means is|the fact is that|it should be (?:noted|said))\b",
     )
     .unwrap()
 });
 
-static FILLER_PHRASES: Lazy<Regex> = Lazy::new(|| {
+static FILLER_PHRASES: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b(at the end of the day|when all is said and done|in many ways|to a large extent|on a personal level|the fact of the matter is|the bottom line is)\b",
     )
     .unwrap()
 });
 
-static PASSIVE_VOICE: Lazy<Regex> = Lazy::new(|| {
+static PASSIVE_VOICE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:is|was|are|were|been|being)\s+\w+(?:ed|en)\b").unwrap()
 });
 
-static PROPER_NOUN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b[A-Z][a-z]{2,}\b").unwrap());
-static NUMERIC: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\d+(?:[.,]\d+)?(?:%|x|×)?\b").unwrap());
+static PROPER_NOUN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[A-Z][a-z]{2,}\b").unwrap());
+static NUMERIC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+(?:[.,]\d+)?(?:%|x|×)?\b").unwrap());
 
-static SENTENCE_SPLIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]+\s+").unwrap());
+static SENTENCE_SPLIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?]+\s+").unwrap());
 
 fn count_ly_excluding(text: &str) -> usize {
     LY_ADVERB

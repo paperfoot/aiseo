@@ -5,7 +5,7 @@
 //! or voice assistant answer. `speakable_eligible` flags whether the page
 //! already advertises Speakable schema, the explicit voice-assistant hint.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
@@ -19,7 +19,7 @@ pub struct Voice {
 // Rust's `regex` crate has no look-behind, so we split on punctuation-then-
 // whitespace. Each chunk is a sentence body (trailing `.`/`!`/`?` already
 // consumed by the split). Good enough for word-count windows.
-static SENTENCE_SPLIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]+\s+").unwrap());
+static SENTENCE_SPLIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?]+\s+").unwrap());
 
 pub fn extract(body_text: &str, schema_types: &[String], raw_html: &str) -> Voice {
     let sentences: Vec<&str> = SENTENCE_SPLIT

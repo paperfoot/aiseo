@@ -26,7 +26,7 @@
 //!   - `shadcn_default_oklch`     unmodified shadcn `:root` palette
 //!   - `vercel_next_forge_default` next-forge + geist + shadcn combo
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -58,17 +58,17 @@ struct Matcher {
 // ---------------------------------------------------------------------------
 
 fn has_rounded(line: &str) -> bool {
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\brounded(?:-\w+)?\b").unwrap());
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\brounded(?:-\w+)?\b").unwrap());
     RE.is_match(line)
 }
 
 fn has_border_radius(line: &str) -> bool {
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)border-radius").unwrap());
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)border-radius").unwrap());
     RE.is_match(line)
 }
 
 fn is_safe_element(line: &str) -> bool {
-    static RE: Lazy<Regex> = Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)<(?:blockquote|nav[\s>]|pre[\s>]|code[\s>]|a\s|input[\s>]|span[\s>])")
             .unwrap()
     });
@@ -79,7 +79,7 @@ fn is_safe_element(line: &str) -> bool {
 // Per-line regex matchers
 // ---------------------------------------------------------------------------
 
-static MATCHERS: Lazy<Vec<Matcher>> = Lazy::new(|| {
+static MATCHERS: LazyLock<Vec<Matcher>> = LazyLock::new(|| {
     fn mk(id: &'static str, re: &str, pass: fn(&regex::Captures, &str) -> Option<String>) -> Matcher {
         Matcher {
             id,
@@ -400,7 +400,7 @@ static MATCHERS: Lazy<Vec<Matcher>> = Lazy::new(|| {
 // Doc-level analyzers (aggregate signals impossible to express per-line)
 // ---------------------------------------------------------------------------
 
-static GENERIC_FONTS: Lazy<std::collections::HashSet<&'static str>> = Lazy::new(|| {
+static GENERIC_FONTS: LazyLock<std::collections::HashSet<&'static str>> = LazyLock::new(|| {
     [
         "serif",
         "sans-serif",

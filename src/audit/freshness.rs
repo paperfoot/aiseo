@@ -6,28 +6,28 @@
 //! reads "Updated January 2024" — readers and AI retrievers both notice).
 
 use chrono::{Datelike, NaiveDate, Utc};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
-static DATE_MODIFIED_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#""dateModified"\s*:\s*"([^"]+)""#).unwrap());
-static DATE_PUBLISHED_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#""datePublished"\s*:\s*"([^"]+)""#).unwrap());
+static DATE_MODIFIED_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#""dateModified"\s*:\s*"([^"]+)""#).unwrap());
+static DATE_PUBLISHED_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#""datePublished"\s*:\s*"([^"]+)""#).unwrap());
 // Wide year range so we don't go silent at decade boundaries — same lesson
 // learned in the Python skill's 2030 bug.
-static YEAR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b(19\d{2}|20\d{2}|21\d{2})\b").unwrap());
+static YEAR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(19\d{2}|20\d{2}|21\d{2})\b").unwrap());
 
 // `<time datetime="2026-05-12">` etc. We just grab the attribute value;
 // validation lives in parse_date.
-static TIME_DATETIME_RE: Lazy<Regex> = Lazy::new(|| {
+static TIME_DATETIME_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"<time\b[^>]*\bdatetime\s*=\s*["']([^"']+)["']"#).unwrap()
 });
 
 // Visible "Updated <date>" / "Last updated <date>" / "Modified <date>" /
 // "Reviewed <date>" strings. Matches month-day-year, year-only, or
 // ISO-like fragments — anything that looks like a date in plain prose.
-static VISIBLE_DATE_LABEL_RE: Lazy<Regex> = Lazy::new(|| {
+static VISIBLE_DATE_LABEL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)(?:last\s+updated|updated\s+on|updated|last\s+modified|modified\s+on|modified|reviewed\s+on|reviewed|fact[\s-]?checked\s+on|fact[\s-]?checked|posted|published)\s*[:.\s]+\s*((?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}?,?\s*\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4}|\d{4})",
     )

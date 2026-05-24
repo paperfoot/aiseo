@@ -9,7 +9,7 @@
 //! All checks deterministic, no network calls. Pairs with Tier-2 fetch
 //! analysis (response size, compression headers) for a complete picture.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Serialize;
@@ -82,18 +82,18 @@ pub struct InlineBundleBytes {
     pub inline_js: usize,
 }
 
-static NONDESCRIPTIVE_FILENAME: Lazy<Regex> = Lazy::new(|| {
+static NONDESCRIPTIVE_FILENAME: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)(^|/)(img[_-]?\d+|dsc[_-]?\d+|image[_-]?\d+|photo[_-]?\d+|picture[_-]?\d+|screen ?shot|screenshot)([_-]?\d+)?\.(jpe?g|png|gif|webp|avif|heic)$",
     )
     .unwrap()
 });
 
-static MODERN_FORMAT: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)\.(webp|avif|jxl)(\?|#|$)").unwrap());
+static MODERN_FORMAT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\.(webp|avif|jxl)(\?|#|$)").unwrap());
 
-static FONT_DISPLAY: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)font-display\s*:\s*(swap|optional|fallback)").unwrap());
+static FONT_DISPLAY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)font-display\s*:\s*(swap|optional|fallback)").unwrap());
 
 const FOLD_BUFFER: usize = 2;
 

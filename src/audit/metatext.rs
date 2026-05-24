@@ -13,7 +13,7 @@
 //!      table-of-contents (Introduction / Background / Key Features / FAQ /
 //!      Conclusion). Novel detector — no existing OSS tool ships it.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -42,7 +42,7 @@ pub struct HeadingSkeleton {
 
 /// Canonical AI table-of-contents — when a page's headings substantially
 /// overlap this set, the skeleton is the giveaway.
-static CANONICAL_HEADINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+static CANONICAL_HEADINGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "introduction",
         "background",
@@ -90,7 +90,7 @@ fn mk(kind: &'static str, conf: f64, p: &str, weights: Option<(f64, f64, f64)>) 
     }
 }
 
-static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
+static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
     vec![
         // ── Process narration (openers cluster in the first 15%) ─────────────
         mk(
