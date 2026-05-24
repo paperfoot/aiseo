@@ -1,5 +1,9 @@
-//! Freshness signals: presence of dateModified / datePublished, year
-//! mentions in the body, and whether the page is plausibly current.
+//! Freshness signals: dateModified / datePublished from JSON-LD,
+//! visible-text "Updated / Modified / Reviewed" strings, `<time
+//! datetime>` attributes, year mentions, and the agreement between
+//! schema dates and visible dates (Codex flagged the gap: a page can
+//! claim dateModified=2026-05 in JSON-LD while the visible header still
+//! reads "Updated January 2024" — readers and AI retrievers both notice).
 
 use chrono::{Datelike, NaiveDate, Utc};
 use once_cell::sync::Lazy;
@@ -14,6 +18,22 @@ static DATE_PUBLISHED_RE: Lazy<Regex> =
 // learned in the Python skill's 2030 bug.
 static YEAR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b(19\d{2}|20\d{2}|21\d{2})\b").unwrap());
 
+// `<time datetime="2026-05-12">` etc. We just grab the attribute value;
+// validation lives in parse_date.
+static TIME_DATETIME_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"<time\b[^>]*\bdatetime\s*=\s*["']([^"']+)["']"#).unwrap()
+});
+
+// Visible "Updated <date>" / "Last updated <date>" / "Modified <date>" /
+// "Reviewed <date>" strings. Matches month-day-year, year-only, or
+// ISO-like fragments — anything that looks like a date in plain prose.
+static VISIBLE_DATE_LABEL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)(?:last\s+updated|updated\s+on|updated|last\s+modified|modified\s+on|modified|reviewed\s+on|reviewed|fact[\s-]?checked\s+on|fact[\s-]?checked|posted|published)\s*[:.\s]+\s*((?:\d{1,2}\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}?,?\s*\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4}|\d{4})",
+    )
+    .unwrap()
+});
+
 #[derive(Serialize)]
 pub struct Freshness {
     pub date_modified: Option<String>,
@@ -23,9 +43,20 @@ pub struct Freshness {
     pub days_since_modified: Option<i64>,
     pub year_mentions: Vec<u16>,
     pub current_year: i32,
+    /// First `<time datetime>` attribute value, if present. Visible-time
+    /// elements are the HTML-spec-blessed way to mark up dates and AI
+    /// retrievers parse them.
+    pub time_datetime: Option<String>,
+    /// First visible "Updated <date>" / "Modified <date>" / "Reviewed
+    /// <date>" string found in the body text.
+    pub visible_updated_label: Option<String>,
+    /// True when JSON-LD claims a dateModified that's substantially newer
+    /// (>180 days) than the latest visible signal. Hard signal that the
+    /// schema is being updated without the visible text being refreshed.
+    pub schema_vs_visible_mismatch: bool,
 }
 
-pub fn analyze(html: &str, _schema_types: &[String]) -> Freshness {
+pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshness {
     let date_modified = DATE_MODIFIED_RE
         .captures(html)
         .and_then(|c| c.get(1))
@@ -40,11 +71,43 @@ pub fn analyze(html: &str, _schema_types: &[String]) -> Freshness {
     let days = pick.and_then(|s| parse_date(s).map(|d| (today - d).num_days()));
 
     let mut years: Vec<u16> = YEAR_RE
-        .find_iter(html)
+        .find_iter(body_text)
         .filter_map(|m| m.as_str().parse::<u16>().ok())
         .collect();
     years.sort();
     years.dedup();
+
+    let time_datetime = TIME_DATETIME_RE
+        .captures(html)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string());
+
+    let visible_updated_label = VISIBLE_DATE_LABEL_RE
+        .captures(body_text)
+        .map(|c| c.get(0).map(|m| m.as_str().to_string()))
+        .flatten()
+        .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "));
+
+    // Schema-vs-visible mismatch: schema dateModified parses, visible
+    // signals do not corroborate (or are >180 days older than schema).
+    let schema_vs_visible_mismatch = match (
+        date_modified.as_deref().and_then(parse_date),
+        time_datetime.as_deref().and_then(parse_date).or_else(|| {
+            visible_updated_label
+                .as_deref()
+                .and_then(extract_year_from_label)
+                .map(|y| NaiveDate::from_ymd_opt(y as i32, 1, 1))
+                .flatten()
+        }),
+    ) {
+        (Some(schema), Some(visible)) => (schema - visible).num_days() > 180,
+        (Some(_), None) if date_modified.is_some() => {
+            // Schema has a modified date but body has neither a <time>
+            // nor an "Updated" label. Flag only on long content.
+            body_text.split_whitespace().count() >= 400
+        }
+        _ => false,
+    };
 
     Freshness {
         date_modified,
@@ -52,7 +115,17 @@ pub fn analyze(html: &str, _schema_types: &[String]) -> Freshness {
         days_since_modified: days,
         year_mentions: years,
         current_year: today.year(),
+        time_datetime,
+        visible_updated_label,
+        schema_vs_visible_mismatch,
     }
+}
+
+fn extract_year_from_label(label: &str) -> Option<u16> {
+    YEAR_RE
+        .find_iter(label)
+        .filter_map(|m| m.as_str().parse::<u16>().ok())
+        .max()
 }
 
 /// Parse a JSON-LD date value tolerantly. Handles RFC 3339 with timezone,

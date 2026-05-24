@@ -30,6 +30,8 @@ struct AuditEnvelope {
     metatext: audit::Metatext,
     copy_precision: audit::CopyPrecision,
     design_slop: audit::DesignSlop,
+    performance: audit::Performance,
+    link_graph: audit::LinkGraph,
     suggestions: Vec<String>,
 }
 
@@ -133,6 +135,8 @@ pub fn run(
         metatext: report.metatext,
         copy_precision: report.copy_precision,
         design_slop: report.design_slop,
+        performance: report.performance,
+        link_graph: report.link_graph,
         suggestions: report.suggestions,
     };
 

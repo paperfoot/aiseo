@@ -17,8 +17,10 @@ pub mod factors;
 mod freshness;
 mod info_gain;
 mod keywords;
+mod links;
 mod meta;
 mod metatext;
+mod performance;
 mod position;
 pub mod report;
 mod suggest;
@@ -33,8 +35,10 @@ pub use evidence::Evidence;
 pub use freshness::Freshness;
 pub use info_gain::InformationGain;
 pub use keywords::Keywords;
+pub use links::LinkGraph;
 pub use meta::{Meta, OpenGraph, TwitterCard};
 pub use metatext::Metatext;
+pub use performance::Performance;
 pub use position::PositionBias;
 pub use suggest::ScoreBreakdown;
 pub use voice::Voice;
@@ -59,6 +63,8 @@ pub struct AuditReport {
     pub metatext: Metatext,
     pub copy_precision: CopyPrecision,
     pub design_slop: DesignSlop,
+    pub performance: Performance,
+    pub link_graph: LinkGraph,
     pub score: u32,
     pub score_breakdown: ScoreBreakdown,
     pub suggestions: Vec<String>,
@@ -145,7 +151,9 @@ pub fn audit_content(
     let schema_types = meta::extract_schema_types(&doc);
     let content = content::extract(&doc);
     let position_bias = position::analyze(&content.body_text);
-    let freshness = freshness::analyze(&html_like, &schema_types);
+    let freshness = freshness::analyze(&html_like, &content.body_text, &schema_types);
+    let performance = performance::extract(&doc, &html_like);
+    let link_graph = links::extract(&doc, meta.canonical.as_deref());
     let keywords = keywords::extract(&content.body_text);
     // Pass heading text into entities so the extractor can suppress
     // matches that are *just* a section title — e.g. an H3 like
@@ -196,6 +204,13 @@ pub fn audit_content(
     if let Some(s) = design_slop::suggestion(&design_slop) {
         suggestions.push(s);
     }
+    suggestions.extend(performance::suggestions(&performance));
+    suggestions.extend(links::suggestions(&link_graph, content.word_count));
+    if freshness.schema_vs_visible_mismatch {
+        suggestions.push(
+            "Schema dateModified is newer than the visible \"Updated/Modified\" signal (or there is no visible date at all). Update both, not just the schema.".into(),
+        );
+    }
     let score_breakdown = suggest::score_breakdown(
         &meta,
         &og,
@@ -227,6 +242,8 @@ pub fn audit_content(
         metatext,
         copy_precision,
         design_slop,
+        performance,
+        link_graph,
         score,
         score_breakdown,
         suggestions,

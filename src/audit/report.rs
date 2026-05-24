@@ -227,11 +227,18 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
     // ── Freshness (always shows; collapses to a single line if all absent) ──
     let date_mod = env.get("freshness").and_then(|f| f.get("date_modified"));
     let date_pub = env.get("freshness").and_then(|f| f.get("date_published"));
-    let any_date = date_mod.is_some_and(|v| !v.is_null()) || date_pub.is_some_and(|v| !v.is_null());
+    let time_dt = env.get("freshness").and_then(|f| f.get("time_datetime"));
+    let visible = env.get("freshness").and_then(|f| f.get("visible_updated_label"));
+    let any_date = date_mod.is_some_and(|v| !v.is_null())
+        || date_pub.is_some_and(|v| !v.is_null())
+        || time_dt.is_some_and(|v| !v.is_null())
+        || visible.is_some_and(|v| !v.is_null());
     if any_date {
         body.push_str("<h2>Freshness</h2>\n<table>\n");
-        push_kv_skip_empty(&mut body, "Modified", date_mod);
-        push_kv_skip_empty(&mut body, "Published", date_pub);
+        push_kv_skip_empty(&mut body, "Schema dateModified", date_mod);
+        push_kv_skip_empty(&mut body, "Schema datePublished", date_pub);
+        push_kv_skip_empty(&mut body, "<time datetime> value", time_dt);
+        push_kv_skip_empty(&mut body, "Visible \"Updated\" label", visible);
         push_kv_skip_empty(
             &mut body,
             "Days since modified",
@@ -578,6 +585,76 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
 
     // (Freshness block now rendered earlier under the Indexing surface so
     // related metadata sits together.)
+
+    // ── Performance (static-HTML signals) ────────────────────────────────────
+    if let Some(perf) = env.get("performance") {
+        body.push_str("<h2>Performance</h2>\n<table>\n");
+        if let Some(imgs) = perf.get("images") {
+            push_kv(&mut body, "Images", imgs.get("total"));
+            push_kv(&mut body, "Missing lazy-loading (below fold)", imgs.get("eligible_for_lazy_missing"));
+            push_kv(&mut body, "Missing width / height", imgs.get("missing_dimensions"));
+            push_kv(&mut body, "Templated filenames (IMG_1234, etc.)", imgs.get("non_descriptive_filenames"));
+            push_kv(&mut body, "Modern format via <picture>", imgs.get("modern_format_via_picture"));
+            push_kv(&mut body, "Modern format via src", imgs.get("modern_format_via_src"));
+        }
+        if let Some(rb) = perf.get("render_blocking") {
+            push_kv(&mut body, "Render-blocking <script> in <head>", rb.get("head_scripts_blocking"));
+            push_kv(&mut body, "Stylesheets in <head>", rb.get("head_stylesheets"));
+        }
+        if let Some(rh) = perf.get("resource_hints") {
+            push_kv(&mut body, "preload links", rh.get("preload"));
+            push_kv(&mut body, "preconnect links", rh.get("preconnect"));
+            push_kv(&mut body, "dns-prefetch links", rh.get("dns_prefetch"));
+            push_kv_bool(&mut body, "LCP image preloaded", rh.get("preloads_an_image"));
+        }
+        if let Some(f) = perf.get("fonts") {
+            push_kv(&mut body, "External font links", f.get("external_link_count"));
+            push_kv_bool(&mut body, "font-display strategy", f.get("has_font_display_strategy"));
+            push_kv(&mut body, "Fonts preloaded", f.get("preloaded"));
+        }
+        if let Some(ib) = perf.get("inline_bytes") {
+            let css = ib.get("inline_css").and_then(|v| v.as_u64()).unwrap_or(0);
+            let js = ib.get("inline_js").and_then(|v| v.as_u64()).unwrap_or(0);
+            body.push_str(&format!(
+                "  <tr><td class=\"label\">Inline CSS</td><td>{} KB</td></tr>\n",
+                css / 1024
+            ));
+            body.push_str(&format!(
+                "  <tr><td class=\"label\">Inline JS</td><td>{} KB</td></tr>\n",
+                js / 1024
+            ));
+        }
+        body.push_str("</table>\n");
+    }
+
+    // ── Link graph ───────────────────────────────────────────────────────────
+    if let Some(lg) = env.get("link_graph") {
+        let total = lg.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
+        if total > 0 {
+            body.push_str("<h2>Links</h2>\n<table>\n");
+            push_kv(&mut body, "Total in main content", lg.get("total"));
+            push_kv(&mut body, "Internal", lg.get("internal"));
+            push_kv(&mut body, "External", lg.get("external"));
+            push_kv(&mut body, "Unique external hosts", lg.get("external_hosts"));
+            push_kv(&mut body, "External rel=nofollow", lg.get("nofollow_external"));
+            push_kv(&mut body, "Authority-host outbound", lg.get("authority_external"));
+            push_kv(&mut body, "Generic anchor text", lg.get("generic_anchor_text"));
+            body.push_str("</table>\n");
+        }
+    }
+
+    // ── Fetch metadata (only present when fetched via `aiseo fetch`) ────────
+    if let Some(fetched) = env.get("fetched") {
+        body.push_str("<h2>Response</h2>\n<table>\n");
+        push_kv(&mut body, "Status", fetched.get("status"));
+        push_kv(&mut body, "Bytes", fetched.get("bytes"));
+        push_kv(&mut body, "Content-Encoding", fetched.get("content_encoding"));
+        push_kv(&mut body, "Cache-Control", fetched.get("cache_control"));
+        push_kv(&mut body, "X-Robots-Tag", fetched.get("x_robots_tag"));
+        push_kv(&mut body, "Last-Modified", fetched.get("last_modified"));
+        push_kv(&mut body, "Server", fetched.get("server"));
+        body.push_str("</table>\n");
+    }
 
     // ── Headings in order (sanity table) ────────────────────────────────────
     if let Some(headings) = env

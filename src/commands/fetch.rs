@@ -40,6 +40,8 @@ struct FetchEnvelope {
     metatext: audit::Metatext,
     copy_precision: audit::CopyPrecision,
     design_slop: audit::DesignSlop,
+    performance: audit::Performance,
+    link_graph: audit::LinkGraph,
     suggestions: Vec<String>,
 }
 
@@ -50,6 +52,20 @@ struct FetchInfo {
     content_type: Option<String>,
     bytes: usize,
     fetched_at: String,
+    /// `X-Robots-Tag` response header — header-level indexing directive.
+    /// Mirrors `<meta name="robots">` but only visible to the fetcher,
+    /// not to a file-system audit. Present-and-restrictive (`noindex`,
+    /// `nofollow`, `noai`, `noimageai`, `none`) is the finding.
+    x_robots_tag: Option<String>,
+    /// `Content-Encoding` — `br`, `gzip`, `zstd`, or absent. Absent on
+    /// a non-trivial HTML response is a real performance miss.
+    content_encoding: Option<String>,
+    /// `Cache-Control` value, if any. Surfaces public/private + max-age.
+    cache_control: Option<String>,
+    /// `Last-Modified` header.
+    last_modified: Option<String>,
+    /// `Server` header banner, if disclosed.
+    server: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -110,6 +126,11 @@ pub fn run(
 
     let status = response.status();
     let content_type = response.header("content-type").map(str::to_string);
+    let x_robots_tag = response.header("x-robots-tag").map(str::to_string);
+    let content_encoding = response.header("content-encoding").map(str::to_string);
+    let cache_control = response.header("cache-control").map(str::to_string);
+    let last_modified = response.header("last-modified").map(str::to_string);
+    let server = response.header("server").map(str::to_string);
 
     // Cap the body at 10 MB so a hostile / accidental huge response can't
     // exhaust memory. Reads only up to the limit; truncation is signalled
@@ -149,6 +170,35 @@ pub fn run(
             &factor_list,
         );
     }
+    // Header-level indexing directive: X-Robots-Tag noindex/nofollow/
+    // noai/noimageai/none. Add as a suggestion so the user sees it next
+    // to the in-body robots-meta finding.
+    let mut extra_suggestions: Vec<String> = Vec::new();
+    if let Some(xrt) = x_robots_tag.as_deref() {
+        let l = xrt.to_ascii_lowercase();
+        let has = |needle: &str| l.split([',', ';']).any(|t| t.trim() == needle);
+        if has("noindex") || has("none") {
+            extra_suggestions.push(format!(
+                "X-Robots-Tag header is `{xrt}`. Page excluded from index at the header level — meta-robots can't override this."
+            ));
+        }
+        if has("noai") || has("noimageai") {
+            extra_suggestions.push(format!(
+                "X-Robots-Tag includes `noai`/`noimageai`. AI training crawlers are explicitly blocked at the header."
+            ));
+        }
+    }
+    if content_encoding.as_deref().is_none() && bytes > 50_000 {
+        extra_suggestions.push(format!(
+            "{} KB response with no Content-Encoding (no Brotli/gzip). Compression cuts transfer size 70–85%.",
+            bytes / 1024,
+        ));
+    }
+
+    if !extra_suggestions.is_empty() {
+        report.suggestions.splice(0..0, extra_suggestions);
+    }
+
     let envelope = FetchEnvelope {
         fetched: FetchInfo {
             url: url.clone(),
@@ -156,6 +206,11 @@ pub fn run(
             content_type,
             bytes,
             fetched_at: chrono::Utc::now().to_rfc3339(),
+            x_robots_tag,
+            content_encoding,
+            cache_control,
+            last_modified,
+            server,
         },
         file: report.file,
         file_type: report.file_type,
@@ -192,6 +247,8 @@ pub fn run(
         metatext: report.metatext,
         copy_precision: report.copy_precision,
         design_slop: report.design_slop,
+        performance: report.performance,
+        link_graph: report.link_graph,
         suggestions: report.suggestions,
     };
 
