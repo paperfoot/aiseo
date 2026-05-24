@@ -10,9 +10,28 @@
 //! variant only adds rot.
 
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::AppError;
+
+/// Default folder where bare-filename `--out` values land.
+/// `--out audit.html`            → `~/Documents/aiseo/audit.html`
+/// `--out reports/audit.html`    → `./reports/audit.html` (honoured as-is)
+/// `--out /tmp/audit.html`       → `/tmp/audit.html` (honoured as-is)
+pub fn resolve_out_path(raw: &Path) -> PathBuf {
+    if raw.is_absolute() || raw.components().count() > 1 {
+        return raw.to_path_buf();
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let mut p = PathBuf::from(home);
+        p.push("Documents");
+        p.push("aiseo");
+        p.push(raw);
+        p
+    } else {
+        raw.to_path_buf()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum ReportFormat {
@@ -64,6 +83,12 @@ pub fn write<E: Serialize>(
         ReportFormat::Html => render_html(input)?,
         ReportFormat::Sarif => render_sarif(input)?,
     };
+    if let Some(parent) = out_path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
     std::fs::write(out_path, body)?;
     Ok(())
 }

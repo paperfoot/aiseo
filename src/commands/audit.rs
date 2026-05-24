@@ -136,11 +136,12 @@ pub fn run(
         suggestions: report.suggestions,
     };
 
-    if let Some(out_path) = out.as_ref() {
-        let format = ReportFormat::from_extension(out_path)?;
+    if let Some(out_raw) = out.as_ref() {
+        let out_path = report::resolve_out_path(out_raw);
+        let format = ReportFormat::from_extension(&out_path)?;
         report::write(
             format,
-            out_path,
+            &out_path,
             &ReportInput {
                 envelope: &envelope,
                 file_label: &envelope.file,
