@@ -43,8 +43,8 @@ impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            owner: "199-biotechnologies".into(),
-            repo: "agent-cli-framework".into(),
+            owner: "paperfoot".into(),
+            repo: "aiseo".into(),
         }
     }
 }

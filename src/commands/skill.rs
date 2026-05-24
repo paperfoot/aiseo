@@ -12,7 +12,7 @@ fn skill_content() -> String {
     format!(
         r#"---
 name: {name}
-description: Agent-first SEO / GEO / AEO auditor. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", "generate JSON-LD", "audit a live URL", or "verify a fix landed". Triggers on SEO, GEO, AEO, AI search optimisation, generative engine optimisation, schema.org, rich results. Do NOT use for image optimisation or server performance.
+description: Agent-first SEO / GEO / AEO auditor with Information-Gain scoring, AI-slop detection, schema-spam and FAQ-rich-result-deprecation flags, heading-hierarchy / hreflang / noscript checks. Use when the user asks to "audit SEO", "check AI search visibility", "audit a page for ChatGPT/Perplexity/Claude/Gemini citation", "score this page", "check schema markup", "generate JSON-LD", "audit a live URL", "verify a fix landed", "check Information Gain", or "detect AI writing slop". Triggers on SEO, GEO, AEO, AI search optimisation, generative engine optimisation, schema.org, rich results, llms.txt. Do NOT use for image optimisation or server performance.
 ---
 
 # {name}

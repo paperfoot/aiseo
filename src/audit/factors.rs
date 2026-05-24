@@ -50,9 +50,11 @@ pub fn component_factor(name: &str) -> Factor {
     match name {
         "meta_title" | "meta_description" => Factor::Meta,
         "og_title" | "og_image" => Factor::Og,
-        "h1" | "h2_count" | "word_count" | "tldr" => Factor::Content,
+        "h1" | "h2_count" | "word_count" | "tldr" | "img_alt" | "ai_slop"
+        | "information_gain" => Factor::Content,
         "schema" => Factor::Schema,
-        "date_modified" => Factor::Freshness,
+        "date_modified" | "staleness" => Factor::Freshness,
+        "tldr_position" | "first_stat_position" => Factor::Position,
         _ => Factor::Content,
     }
 }
@@ -87,7 +89,8 @@ fn suggestion_matches(s: &str, f: Factor) -> bool {
         Factor::Schema => lower.contains("schema") || lower.contains("json-ld"),
         Factor::Freshness => lower.contains("datemodified") || lower.contains("modified") || lower.contains("days ago"),
         Factor::Position => {
-            lower.contains("tl;dr appears")
+            lower.contains("tl;dr sits")
+                || lower.contains("tl;dr appears")
                 || lower.contains("first statistic")
                 || lower.contains("position")
         }

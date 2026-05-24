@@ -77,6 +77,7 @@ A single typed JSON envelope. Agents read sub-objects directly; humans read the 
 - **`evidence`** — `{ stat_count, quote_count, unsupported_claims[] }`
 - **`voice`** — `{ featured_snippet_candidate, speakable_eligible, avg_sentence_words }`
 - **`ai_slop`** — `{ signals[], density_per_1000_words, verdict }`. Regex-only LLM-writing detector (negation pivots, `delve` family, `tapestry` cluster, false-conclusion openers, bold-colon headers, etc.). Em-dashes deliberately NOT flagged — broken signal in 2026 and Boris-style British English uses them. `verdict` is `clean | suspicious | likely_ai` by confidence-weighted density per 1000 words.
+- **`information_gain`** — `{ score: 0..10, counts, samples[] }`. Google's March-2026 Core Update made Information Gain a dominant content-quality signal. Counts named-source quotes, sample-size disclosures (`n=…`), year-over-year deltas, first-person evidence (`we analysed…`), methodology disclosure, numbered citations. Below 5 starts deducting from the score; below 2 hits hard.
 - `position_bias` — word-offset percentages of TL;DR / first stat / first credential, with warnings when high-leverage signals sit past the first 30% of the page
 - `freshness` — `dateModified`, `datePublished`, days since last modification, year mentions
 - `score` — rough 0–100, weighted toward AI-citation surface

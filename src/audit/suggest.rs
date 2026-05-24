@@ -2,7 +2,7 @@
 //! 0-100 score. Agents read the `suggestions` array; humans want a quick
 //! gut number.
 
-use super::{AiSlop, ContentStructure, Freshness, Meta, OpenGraph, PositionBias};
+use super::{AiSlop, ContentStructure, Freshness, InformationGain, Meta, OpenGraph, PositionBias};
 use serde::Serialize;
 
 /// Per-component deduction. Agents read this to know *which* axis to fix
@@ -114,6 +114,47 @@ pub fn build(
     if schema_types.is_empty() {
         out.push("No JSON-LD. Article + Organization at minimum; FAQ for question pages.".into());
     }
+    // FAQ schema spam — Google retired FAQ rich results on 7 May 2026.
+    // FAQPage on a light page is now cargo cult: zero rich-result benefit,
+    // and the Ahrefs Apr-2026 study found schema density correlates with
+    // -4.6% AI Overview citations.
+    if schema_types.iter().any(|t| t == "FAQPage") && content.word_count < 800 {
+        out.push(
+            "FAQPage schema on a light page. Google retired FAQ rich results 7 May 2026; on thin content it's cargo cult."
+                .into(),
+        );
+    }
+    // Schema density — Ahrefs Apr-2026: 6+ distinct types correlates with
+    // negative AI Mode citation lift. Stop stuffing.
+    if schema_types.len() > 6 {
+        out.push(format!(
+            "{} JSON-LD @types on one page. Ahrefs Apr-2026: schema density past 6 correlates with negative AI Mode lift.",
+            schema_types.len()
+        ));
+    }
+
+    // ── Noscript / hreflang / heading hierarchy ────────────────────────────
+    if content.noscript_kind == crate::audit::content::NoscriptKind::BoilerplateOnly {
+        out.push(
+            "`<noscript>` only says \"enable JavaScript\". Crawlers see nothing on JS-only pages."
+                .into(),
+        );
+    }
+    // Heading-order violations: H3 before any H2, H2 before any H1,
+    // levels skipped (h1 -> h3 directly).
+    if let Some(v) = heading_hierarchy_violation(&content.headings_in_order) {
+        out.push(v);
+    }
+    // Hreflang is only flagged if the page declares a non-default lang
+    // but advertises no alternates — we don't badger English-only pages.
+    if let Some(l) = &content.html_lang
+        && !l.starts_with("en")
+        && content.hreflangs.is_empty()
+    {
+        out.push(
+            "Non-English page with no `<link rel=alternate hreflang>` alternates. AI engines down-rank lone translations.".into(),
+        );
+    }
 
     // ── Freshness ────────────────────────────────────────────────────────────
     if fresh.date_modified.is_none() && is_article(schema_types) {
@@ -131,6 +172,32 @@ pub fn build(
     out.extend(pos.warnings.iter().cloned());
 
     out
+}
+
+fn heading_hierarchy_violation(
+    headings: &[crate::audit::content::HeadingOrderEntry],
+) -> Option<String> {
+    let mut seen_max: u8 = 0;
+    let mut last: u8 = 0;
+    for h in headings {
+        if h.level > 1 && seen_max == 0 {
+            return Some(format!(
+                "First heading is H{}, not H1. Crawlers and screen readers rely on H1 first.",
+                h.level
+            ));
+        }
+        if last != 0 && h.level > last + 1 {
+            return Some(format!(
+                "Heading hierarchy skips: H{} after H{}. Use consecutive levels.",
+                h.level, last
+            ));
+        }
+        last = h.level;
+        if h.level > seen_max {
+            seen_max = h.level;
+        }
+    }
+    None
 }
 
 fn is_article(schema_types: &[String]) -> bool {
@@ -157,6 +224,7 @@ fn deductions(
     pos: &PositionBias,
     fresh: &Freshness,
     ai_slop: &AiSlop,
+    info_gain: &InformationGain,
     schema_types: &[String],
 ) -> Vec<ScoreComponent> {
     let mut out: Vec<ScoreComponent> = Vec::new();
@@ -280,6 +348,24 @@ fn deductions(
         }),
         _ => {}
     }
+    // Information Gain: only deduct for pages long enough to plausibly
+    // carry evidence. The 5-to-7 rule benchmark is the band — below 2 is
+    // a real penalty, 2..4 is a soft penalty.
+    if content.word_count >= 300 {
+        match info_gain.score {
+            0..=1 => out.push(ScoreComponent {
+                name: "information_gain",
+                deducted: 15,
+                reason: "Low Information Gain (rewritten / templated)",
+            }),
+            2..=4 => out.push(ScoreComponent {
+                name: "information_gain",
+                deducted: 5,
+                reason: "Below the 5..7 competitive band",
+            }),
+            _ => {}
+        }
+    }
     out
 }
 
@@ -290,9 +376,10 @@ pub fn score_breakdown(
     pos: &PositionBias,
     fresh: &Freshness,
     ai_slop: &AiSlop,
+    info_gain: &InformationGain,
     schema_types: &[String],
 ) -> ScoreBreakdown {
-    let components = deductions(meta, og, content, pos, fresh, ai_slop, schema_types);
+    let components = deductions(meta, og, content, pos, fresh, ai_slop, info_gain, schema_types);
     let total_deducted: u32 = components.iter().map(|c| c.deducted).sum();
     let total = 100u32.saturating_sub(total_deducted);
     ScoreBreakdown { total, components }

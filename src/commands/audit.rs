@@ -26,6 +26,7 @@ struct AuditEnvelope {
     position_bias: audit::PositionBias,
     freshness: audit::Freshness,
     ai_slop: audit::AiSlop,
+    information_gain: audit::InformationGain,
     suggestions: Vec<String>,
 }
 
@@ -39,6 +40,12 @@ struct ContentSummary {
     has_faq: bool,
     has_author: bool,
     has_credentials: bool,
+    image_count: usize,
+    missing_alt_count: usize,
+    html_lang: Option<String>,
+    headings_in_order: Vec<audit::HeadingOrderEntry>,
+    hreflangs: Vec<String>,
+    noscript_kind: audit::NoscriptKind,
 }
 
 pub fn run(
@@ -105,6 +112,12 @@ pub fn run(
             has_faq: report.content.has_faq,
             has_author: report.content.has_author,
             has_credentials: report.content.has_credentials,
+            image_count: report.content.image_count,
+            missing_alt_count: report.content.missing_alt_count,
+            html_lang: report.content.html_lang,
+            headings_in_order: report.content.headings_in_order,
+            hreflangs: report.content.hreflangs,
+            noscript_kind: report.content.noscript_kind,
         },
         keywords: report.keywords,
         entities: report.entities,
@@ -113,6 +126,7 @@ pub fn run(
         position_bias: report.position_bias,
         freshness: report.freshness,
         ai_slop: report.ai_slop,
+        information_gain: report.information_gain,
         suggestions: report.suggestions,
     };
 

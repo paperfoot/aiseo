@@ -40,7 +40,7 @@ pub enum Commands {
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
         /// Write the report to a file. Format is auto-detected from the
-        /// extension: .json, .md, .sarif. SARIF lights up GitHub Code
+        /// extension: .json, .html, .sarif. SARIF lights up GitHub Code
         /// Scanning annotations.
         #[arg(long, value_name = "PATH")]
         out: Option<PathBuf>,
@@ -71,7 +71,7 @@ pub enum Commands {
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
         /// Write the report to a file. Auto-detects format from extension
-        /// (.json, .md, .sarif).
+        /// (.json, .html, .sarif).
         #[arg(long, value_name = "PATH")]
         out: Option<PathBuf>,
         /// Comma-separated list of factors to keep in the output.
@@ -158,7 +158,7 @@ EXAMPLES:
   aiseo audit ~/site/post.md | jq '{score, suggestions}'
   aiseo audit page.html --fail-under 80          # CI gate
   aiseo audit page.html --out audit.sarif        # GitHub Code Scanning
-  aiseo audit page.html --out audit.md           # committable report
+  aiseo audit page.html --out audit.html         # printable report (Iowan serif)
   aiseo audit page.html | jq '.score_breakdown'  # see deductions
 
   # Compose with anything that emits HTML or Markdown on stdout:

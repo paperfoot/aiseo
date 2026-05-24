@@ -13,6 +13,7 @@ mod entities;
 mod evidence;
 pub mod factors;
 mod freshness;
+mod info_gain;
 mod keywords;
 mod meta;
 mod position;
@@ -21,10 +22,11 @@ mod suggest;
 mod voice;
 
 pub use ai_slop::AiSlop;
-pub use content::ContentStructure;
+pub use content::{ContentStructure, HeadingOrderEntry, NoscriptKind};
 pub use entities::Entities;
 pub use evidence::Evidence;
 pub use freshness::Freshness;
+pub use info_gain::InformationGain;
 pub use keywords::Keywords;
 pub use meta::{Meta, OpenGraph, TwitterCard};
 pub use position::PositionBias;
@@ -47,6 +49,7 @@ pub struct AuditReport {
     pub position_bias: PositionBias,
     pub freshness: Freshness,
     pub ai_slop: AiSlop,
+    pub information_gain: InformationGain,
     pub score: u32,
     pub score_breakdown: ScoreBreakdown,
     pub suggestions: Vec<String>,
@@ -139,6 +142,7 @@ pub fn audit_content(
     let evidence = evidence::extract(&content.body_text);
     let voice = voice::extract(&content.body_text, &schema_types, &html_like);
     let ai_slop = ai_slop::extract(&content.body_text);
+    let information_gain = info_gain::extract(&content.body_text);
 
     let mut suggestions = suggest::build(
         &meta,
@@ -151,6 +155,9 @@ pub fn audit_content(
     if let Some(s) = ai_slop::suggestion(&ai_slop) {
         suggestions.push(s);
     }
+    if let Some(s) = info_gain::suggestion(&information_gain, content.word_count) {
+        suggestions.push(s);
+    }
     let score_breakdown = suggest::score_breakdown(
         &meta,
         &og,
@@ -158,6 +165,7 @@ pub fn audit_content(
         &position_bias,
         &freshness,
         &ai_slop,
+        &information_gain,
         &schema_types,
     );
     let score = score_breakdown.total;
@@ -177,6 +185,7 @@ pub fn audit_content(
         position_bias,
         freshness,
         ai_slop,
+        information_gain,
         score,
         score_breakdown,
         suggestions,

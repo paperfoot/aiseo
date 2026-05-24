@@ -37,12 +37,7 @@ pub fn analyze(html: &str, _schema_types: &[String]) -> Freshness {
 
     let today = Utc::now().date_naive();
     let pick = date_modified.as_ref().or(date_published.as_ref());
-    let days = pick.and_then(|s| {
-        // Accept ISO 8601 dates with or without time component.
-        NaiveDate::parse_from_str(&s[..s.len().min(10)], "%Y-%m-%d")
-            .ok()
-            .map(|d| (today - d).num_days())
-    });
+    let days = pick.and_then(|s| parse_date(s).map(|d| (today - d).num_days()));
 
     let mut years: Vec<u16> = YEAR_RE
         .find_iter(html)
@@ -58,4 +53,22 @@ pub fn analyze(html: &str, _schema_types: &[String]) -> Freshness {
         year_mentions: years,
         current_year: today.year(),
     }
+}
+
+/// Parse a JSON-LD date value tolerantly. Handles RFC 3339 with timezone,
+/// plain YYYY-MM-DD, and YYYY-MM-DDTHH:MM:SS. Returns None on anything
+/// else (including the v0.4 UTF-8-slice panic on non-ASCII inputs).
+fn parse_date(s: &str) -> Option<NaiveDate> {
+    // RFC 3339 first (handles timezones).
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.naive_utc().date());
+    }
+    // Then the first 10 ASCII chars as YYYY-MM-DD, but only if we have
+    // at least 10 ASCII chars at the front — protects against the UTF-8
+    // slice panic from v0.4.
+    let head: String = s.chars().take_while(|c| c.is_ascii()).take(10).collect();
+    if head.len() == 10 {
+        return NaiveDate::parse_from_str(&head, "%Y-%m-%d").ok();
+    }
+    None
 }

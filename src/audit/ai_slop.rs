@@ -64,15 +64,26 @@ static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
             "high",
             r"(?i)\b(not|never)\b[^.!?\n—–]{3,60}[—–]\s*\w+",
         ),
+        // "delve" stays high; "leverage/foster/underscore" demoted to
+        // medium per Codex review — all three appear in legitimate
+        // business / academic writing.
+        mk("delve_only", "high", r"(?i)\bdelv(e|es|ed|ing)\b"),
         mk(
-            "delve_family",
-            "high",
-            r"\b(?i)(delv(e|es|ed|ing)|leverag(e|es|ed|ing)|foster(s|ed|ing)?|underscor(e|es|ed|ing))\b",
+            "leverage_foster_underscore",
+            "medium",
+            r"(?i)\b(leverag(e|es|ed|ing)|foster(s|ed|ing)?|underscor(e|es|ed|ing))\b",
         ),
+        // Tapestry / paradigm / multifaceted stay high (rare in real prose).
+        // "nuanced" and "interplay" demoted — common in academic writing.
         mk(
             "tapestry_family",
             "high",
-            r"(?i)\b(tapestry|multifaceted|paradigm|nuanced|pivotal|intricate|intricacies|interplay|burgeoning)\b",
+            r"(?i)\b(tapestry|multifaceted|paradigm|pivotal|intricate|intricacies|burgeoning)\b",
+        ),
+        mk(
+            "nuanced_interplay",
+            "low",
+            r"(?i)\b(nuanced|interplay)\b",
         ),
         mk(
             "realm_landscape",
@@ -109,11 +120,14 @@ static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
             "high",
             r"(?i)\bnavigat(e|ing|es|ed)\s+the\s+(complex(it(y|ies))?|landscape|intricacies|challenges|nuances)\b",
         ),
-        mk("bold_colon_header", "high", r"\*\*[^*\n]{1,40}:\*\*\s+\S"),
+        // Per Codex review: single `**Label:** X` is normal markdown; only
+        // becomes a signal at density. Drop to medium.
+        mk("bold_colon_header", "medium", r"\*\*[^*\n]{1,40}:\*\*\s+\S"),
+        // "overall" alone is too common. Keep the rest at high.
         mk(
             "false_conclusion_opener",
             "high",
-            r"(?im)(^|\n)\s*(in\s+conclusion|in\s+summary|to\s+summari[sz]e|to\s+conclude|in\s+closing|overall|all\s+in\s+all)[,\s]",
+            r"(?im)(^|\n)\s*(in\s+conclusion|in\s+summary|to\s+summari[sz]e|to\s+conclude|in\s+closing|all\s+in\s+all)[,\s]",
         ),
         mk(
             "not_only_but_also",

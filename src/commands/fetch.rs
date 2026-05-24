@@ -5,13 +5,13 @@
 //! plain `audit` command stays pure-filesystem.
 
 use serde::Serialize;
-use std::io::Write;
+use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::audit::factors as audit_factors;
 use crate::audit::report::{self, ReportFormat, ReportInput};
-use crate::audit::{self, AuditError};
+use crate::audit::{self, AuditError, ContentType};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -36,6 +36,7 @@ struct FetchEnvelope {
     position_bias: audit::PositionBias,
     freshness: audit::Freshness,
     ai_slop: audit::AiSlop,
+    information_gain: audit::InformationGain,
     suggestions: Vec<String>,
 }
 
@@ -58,6 +59,12 @@ struct ContentSummary {
     has_faq: bool,
     has_author: bool,
     has_credentials: bool,
+    image_count: usize,
+    missing_alt_count: usize,
+    html_lang: Option<String>,
+    headings_in_order: Vec<audit::HeadingOrderEntry>,
+    hreflangs: Vec<String>,
+    noscript_kind: audit::NoscriptKind,
 }
 
 pub fn run(
@@ -95,24 +102,27 @@ pub fn run(
     let status = response.status();
     let content_type = response.header("content-type").map(str::to_string);
 
-    let body = response
-        .into_string()
+    // Cap the body at 10 MB so a hostile / accidental huge response can't
+    // exhaust memory. Reads only up to the limit; truncation is signalled
+    // via the `bytes` field.
+    const MAX_BYTES: u64 = 10 * 1024 * 1024;
+    let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
+    response
+        .into_reader()
+        .take(MAX_BYTES)
+        .read_to_end(&mut buf)
         .map_err(|e| AppError::Transient(format!("reading body: {e}")))?;
+    let body = String::from_utf8_lossy(&buf).into_owned();
     let bytes = body.len();
 
-    // Pick an extension the audit module recognises so it dispatches to
-    // the right parser. Default to .html for anything that smells like
-    // HTML or has no useful content-type.
-    let ext = match content_type.as_deref() {
-        Some(ct) if ct.contains("markdown") => "md",
-        _ => "html",
+    let ctype = match content_type.as_deref() {
+        Some(ct) if ct.contains("markdown") => ContentType::Markdown,
+        _ => ContentType::Html,
     };
 
-    let mut tmp = tempfile_in_state_dir(ext)?;
-    tmp.as_file_mut().write_all(body.as_bytes())?;
-    let path = tmp.path().to_path_buf();
-
-    let mut report = audit::audit_file(&path).map_err(|e| match e {
+    // Audit in memory; the URL is the file label so the envelope is stable
+    // across runs and never leaks the tempdir path.
+    let mut report = audit::audit_content(body, ctype, url.clone()).map_err(|e| match e {
         AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
         AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
             "unsupported file type: .{t}"
@@ -155,6 +165,12 @@ pub fn run(
             has_faq: report.content.has_faq,
             has_author: report.content.has_author,
             has_credentials: report.content.has_credentials,
+            image_count: report.content.image_count,
+            missing_alt_count: report.content.missing_alt_count,
+            html_lang: report.content.html_lang,
+            headings_in_order: report.content.headings_in_order,
+            hreflangs: report.content.hreflangs,
+            noscript_kind: report.content.noscript_kind,
         },
         keywords: report.keywords,
         entities: report.entities,
@@ -163,6 +179,7 @@ pub fn run(
         position_bias: report.position_bias,
         freshness: report.freshness,
         ai_slop: report.ai_slop,
+        information_gain: report.information_gain,
         suggestions: report.suggestions,
     };
 
@@ -222,15 +239,6 @@ pub fn run(
     }
 
     Ok(())
-}
-
-fn tempfile_in_state_dir(ext: &str) -> Result<tempfile::NamedTempFile, AppError> {
-    let dir = std::env::temp_dir();
-    let f = tempfile::Builder::new()
-        .prefix("aiseo-fetch-")
-        .suffix(&format!(".{ext}"))
-        .tempfile_in(dir)?;
-    Ok(f)
 }
 
 fn score_colour(score: u32) -> String {

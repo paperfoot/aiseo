@@ -23,10 +23,34 @@ pub struct ContentStructure {
     /// `<html lang>` value, if present. Used to suppress English-only
     /// heuristics on non-English pages.
     pub html_lang: Option<String>,
+    /// Heading sequence in DOM order, level + text. Drives the
+    /// hierarchy-violation check (H3 before H2, skipped levels).
+    pub headings_in_order: Vec<HeadingOrderEntry>,
+    /// `hreflang` values found on `<link rel="alternate">` — multilingual
+    /// SEO signal. Empty list means the page only advertises itself.
+    pub hreflangs: Vec<String>,
+    /// `<noscript>` body content, if the noscript only contains a
+    /// boilerplate "please enable JavaScript" message it's a quality
+    /// problem rather than a real fallback.
+    pub noscript_kind: NoscriptKind,
     /// Plain-text body, normalised whitespace. Kept here so downstream
     /// modules (position bias, suggestions) don't re-extract it.
     #[serde(skip_serializing)]
     pub body_text: String,
+}
+
+#[derive(Serialize)]
+pub struct HeadingOrderEntry {
+    pub level: u8,
+    pub text: String,
+}
+
+#[derive(Serialize, PartialEq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum NoscriptKind {
+    Absent,
+    BoilerplateOnly,
+    Substantive,
 }
 
 // Credentials must follow a capitalised name within ~3 tokens — bare "OD",
@@ -55,6 +79,9 @@ pub fn extract(doc: &Html) -> ContentStructure {
 
     let (image_count, missing_alt_count) = count_images(doc);
     let html_lang = extract_html_lang(doc);
+    let headings_in_order = extract_headings_in_order(doc);
+    let hreflangs = extract_hreflangs(doc);
+    let noscript_kind = classify_noscript(doc);
 
     ContentStructure {
         word_count: count_words(&body_text),
@@ -68,7 +95,68 @@ pub fn extract(doc: &Html) -> ContentStructure {
         image_count,
         missing_alt_count,
         html_lang,
+        headings_in_order,
+        hreflangs,
+        noscript_kind,
         body_text,
+    }
+}
+
+fn extract_headings_in_order(doc: &Html) -> Vec<HeadingOrderEntry> {
+    let sel = Selector::parse("h1, h2, h3, h4, h5, h6").unwrap();
+    doc.select(&sel)
+        .filter_map(|el| {
+            let name = el.value().name();
+            let level: u8 = name.strip_prefix('h')?.parse().ok()?;
+            let text: String = el
+                .text()
+                .collect::<String>()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            if text.is_empty() {
+                return None;
+            }
+            Some(HeadingOrderEntry { level, text })
+        })
+        .collect()
+}
+
+fn extract_hreflangs(doc: &Html) -> Vec<String> {
+    let sel = Selector::parse("link[rel=\"alternate\"][hreflang]").unwrap();
+    let mut out: Vec<String> = doc
+        .select(&sel)
+        .filter_map(|el| el.value().attr("hreflang").map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn classify_noscript(doc: &Html) -> NoscriptKind {
+    let sel = Selector::parse("noscript").unwrap();
+    let mut any_present = false;
+    let mut any_substantive = false;
+    for el in doc.select(&sel) {
+        any_present = true;
+        let text: String = el.text().collect::<String>().to_ascii_lowercase();
+        let trimmed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        // ≥40 chars beyond the boilerplate trigger threshold counts.
+        let is_boilerplate = trimmed.contains("enable javascript")
+            || trimmed.contains("requires javascript")
+            || trimmed.contains("turn on javascript")
+            || trimmed.contains("javascript is disabled");
+        if !is_boilerplate && trimmed.len() >= 40 {
+            any_substantive = true;
+        }
+    }
+    if !any_present {
+        NoscriptKind::Absent
+    } else if any_substantive {
+        NoscriptKind::Substantive
+    } else {
+        NoscriptKind::BoilerplateOnly
     }
 }
 

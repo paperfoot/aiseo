@@ -32,7 +32,7 @@ pub fn run() {
                         "name": "--out",
                         "type": "path",
                         "required": false,
-                        "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif (GitHub Code Scanning)."
+                        "description": "Write report to file. Format auto-detected from extension: .json, .html (Iowan-Old-Style printable), .sarif (GitHub Code Scanning)."
                     },
                     {
                         "name": "--factors",
@@ -50,7 +50,7 @@ pub fn run() {
                     "open_graph": "{ title, description, image, url, type }",
                     "twitter_card": "{ card, title, description, image }",
                     "schema_types": "[\"Article\", \"FAQPage\", ...]",
-                    "content": "{ word_count, h1[], h2[], h3[], has_tldr, has_faq, has_author, has_credentials, image_count, missing_alt_count, html_lang }",
+                    "content": "{ word_count, h1[], h2[], h3[], has_tldr, has_faq, has_author, has_credentials, image_count, missing_alt_count, html_lang, headings_in_order: [{level, text}], hreflangs[], noscript_kind: 'absent'|'boilerplate_only'|'substantive' }",
                     "keywords": "{ primary: [{ term, count }], questions: [string], density: { term: pct } }",
                     "entities": "{ people: [{ name, credentials? }], organizations: [string] }",
                     "evidence": "{ stat_count, quote_count, unsupported_claims: [{ snippet, position_pct }] }",
@@ -58,6 +58,7 @@ pub fn run() {
                     "position_bias": "{ total_words, tldr_position_pct, first_stat_position_pct, first_credential_position_pct, warnings[] }",
                     "freshness": "{ date_modified, date_published, days_since_modified, year_mentions[], current_year }",
                     "ai_slop": "{ signals: [{ kind, confidence, snippet, position_pct }], density_per_1000_words, verdict: 'clean' | 'suspicious' | 'likely_ai' }",
+                    "information_gain": "{ score: 0..10, counts: { named_quotes, sample_sizes, yoy_deltas, first_person_evidence, method_disclosure, numbered_citations }, samples[] }",
                     "suggestions": "[string, ...]"
                 }
             },
@@ -110,7 +111,7 @@ pub fn run() {
                         "name": "--out",
                         "type": "path",
                         "required": false,
-                        "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif."
+                        "description": "Write report to file. Format auto-detected from extension: .json, .html, .sarif."
                     },
                     {
                         "name": "--factors",
@@ -207,7 +208,7 @@ pub fn run() {
             "env_prefix": format!("{}_", name.to_uppercase())
         },
         "auto_json_when_piped": true,
-        "research_basis": "https://github.com/paperfoot/aiseo/blob/main/docs/research.md"
+        "research_basis": "https://github.com/paperfoot/aiseo"
     });
     println!("{}", serde_json::to_string_pretty(&info).unwrap());
 }
