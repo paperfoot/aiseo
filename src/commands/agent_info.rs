@@ -11,7 +11,7 @@ pub fn run() {
         "designed_for": "coding agents (Claude Code, Codex CLI, Gemini CLI). Humans get a colour fallback.",
         "commands": {
             "audit": {
-                "description": "Full audit of an HTML or Markdown file. Returns metadata, schema types, content structure, position-bias signals, freshness, and a flat suggestion list.",
+                "description": "Full audit of an HTML or Markdown file. Returns metadata, schema types, content structure, position-bias signals, freshness, score breakdown, and a flat suggestion list.",
                 "args": [
                     {
                         "name": "file",
@@ -21,11 +21,19 @@ pub fn run() {
                         "description": "Path to .html, .htm, .md, or .mdx file"
                     }
                 ],
-                "options": [],
+                "options": [
+                    {
+                        "name": "--fail-under",
+                        "type": "int",
+                        "required": false,
+                        "description": "Exit 1 if the audit score is below this threshold. Useful in CI."
+                    }
+                ],
                 "output_shape": {
                     "file": "string",
                     "file_type": "html | markdown",
                     "score": "0..100 (rough; weighted toward AI-citation surface)",
+                    "score_breakdown": "{ total, components: [{ name, deducted, reason }] }",
                     "meta": "{ title, description, keywords, author, canonical }",
                     "open_graph": "{ title, description, image, url, type }",
                     "twitter_card": "{ card, title, description, image }",

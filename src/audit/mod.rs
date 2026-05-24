@@ -17,6 +17,7 @@ pub use content::ContentStructure;
 pub use freshness::Freshness;
 pub use meta::{Meta, OpenGraph, TwitterCard};
 pub use position::PositionBias;
+pub use suggest::ScoreBreakdown;
 
 #[derive(Serialize)]
 pub struct AuditReport {
@@ -30,6 +31,7 @@ pub struct AuditReport {
     pub position_bias: PositionBias,
     pub freshness: Freshness,
     pub score: u32,
+    pub score_breakdown: ScoreBreakdown,
     pub suggestions: Vec<String>,
 }
 
@@ -73,7 +75,8 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
     let freshness = freshness::analyze(&html_like, &schema_types);
 
     let suggestions = suggest::build(&meta, &og, &content, &position_bias, &freshness, &schema_types);
-    let score = suggest::score(&meta, &og, &content, &freshness, &schema_types);
+    let score_breakdown = suggest::score_breakdown(&meta, &og, &content, &freshness, &schema_types);
+    let score = score_breakdown.total;
 
     Ok(AuditReport {
         file: path.display().to_string(),
@@ -86,6 +89,7 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
         position_bias,
         freshness,
         score,
+        score_breakdown,
         suggestions,
     })
 }

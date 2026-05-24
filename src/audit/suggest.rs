@@ -3,6 +3,22 @@
 //! suggestion list, humans want a quick gut number.
 
 use super::{ContentStructure, Freshness, Meta, OpenGraph, PositionBias};
+use serde::Serialize;
+
+/// Per-component deduction. Agents read this to know *which* axis to fix
+/// next, not just the bottom-line score.
+#[derive(Serialize)]
+pub struct ScoreBreakdown {
+    pub total: u32,
+    pub components: Vec<ScoreComponent>,
+}
+
+#[derive(Serialize)]
+pub struct ScoreComponent {
+    pub name: &'static str,
+    pub deducted: u32,
+    pub reason: &'static str,
+}
 
 pub fn build(
     meta: &Meta,
@@ -99,43 +115,101 @@ pub fn build(
     out
 }
 
-pub fn score(
+/// Single source of truth for scoring. Both `score()` (which returns just
+/// the total) and `score_breakdown()` (which returns per-component
+/// deductions) call this — keeps them from drifting.
+fn deductions(
     meta: &Meta,
     og: &OpenGraph,
     content: &ContentStructure,
     fresh: &Freshness,
     schema_types: &[String],
-) -> u32 {
-    let mut s: i32 = 100;
+) -> Vec<ScoreComponent> {
+    let mut out: Vec<ScoreComponent> = Vec::new();
     if meta.title.is_none() {
-        s -= 15;
+        out.push(ScoreComponent {
+            name: "meta_title",
+            deducted: 15,
+            reason: "Missing <title>",
+        });
     }
     if meta.description.is_none() {
-        s -= 10;
+        out.push(ScoreComponent {
+            name: "meta_description",
+            deducted: 10,
+            reason: "Missing meta description",
+        });
     }
     if og.title.is_none() {
-        s -= 5;
+        out.push(ScoreComponent {
+            name: "og_title",
+            deducted: 5,
+            reason: "Missing og:title",
+        });
     }
     if og.image.is_none() {
-        s -= 10;
+        out.push(ScoreComponent {
+            name: "og_image",
+            deducted: 10,
+            reason: "Missing og:image",
+        });
     }
     if content.h1.is_empty() {
-        s -= 10;
+        out.push(ScoreComponent {
+            name: "h1",
+            deducted: 10,
+            reason: "No H1 heading",
+        });
     }
     if content.h2.len() < 2 {
-        s -= 5;
+        out.push(ScoreComponent {
+            name: "h2_count",
+            deducted: 5,
+            reason: "Fewer than 2 H2 headings",
+        });
     }
     if content.word_count < 300 {
-        s -= 10;
+        out.push(ScoreComponent {
+            name: "word_count",
+            deducted: 10,
+            reason: "Body under 300 words",
+        });
     }
     if !content.has_tldr {
-        s -= 5;
+        out.push(ScoreComponent {
+            name: "tldr",
+            deducted: 5,
+            reason: "No TL;DR detected",
+        });
     }
     if schema_types.is_empty() {
-        s -= 15;
+        out.push(ScoreComponent {
+            name: "schema",
+            deducted: 15,
+            reason: "No JSON-LD schema",
+        });
     }
     if fresh.date_modified.is_none() {
-        s -= 5;
+        out.push(ScoreComponent {
+            name: "date_modified",
+            deducted: 5,
+            reason: "Missing dateModified",
+        });
     }
-    s.max(0).min(100) as u32
+    out
 }
+
+pub fn score_breakdown(
+    meta: &Meta,
+    og: &OpenGraph,
+    content: &ContentStructure,
+    fresh: &Freshness,
+    schema_types: &[String],
+) -> ScoreBreakdown {
+    let components = deductions(meta, og, content, fresh, schema_types);
+    let total_deducted: u32 = components.iter().map(|c| c.deducted).sum();
+    let total = 100u32.saturating_sub(total_deducted);
+    ScoreBreakdown { total, components }
+}
+
+

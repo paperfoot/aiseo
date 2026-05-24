@@ -48,7 +48,7 @@ fn main() {
     let ctx = Ctx::new(cli.json, cli.quiet);
 
     let result = match cli.command {
-        Commands::Audit { file } => commands::audit::run(ctx, file),
+        Commands::Audit { file, fail_under } => commands::audit::run(ctx, file, fail_under),
         Commands::AgentInfo => {
             commands::agent_info::run();
             Ok(())

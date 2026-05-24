@@ -32,6 +32,9 @@ pub enum Commands {
     Audit {
         /// Path to .html, .htm, .md, or .mdx file
         file: PathBuf,
+        /// Exit 1 if the audit score is below this threshold. Useful in CI.
+        #[arg(long, value_name = "SCORE")]
+        fail_under: Option<u32>,
     },
     /// Machine-readable capability manifest
     #[command(visible_alias = "info")]
@@ -65,11 +68,14 @@ TIPS:
   • Pipe to `jq` for filtering: `aiseo audit page.html | jq '.suggestions'`
   • Score is rough and weighted toward AI-citation surfaces, not legacy SEO
   • Position bias warnings trigger when TL;DR / first stat sit past 30% of body
-  • Pass `--json` to force the envelope format inside a terminal
+  • Use --fail-under in CI: `aiseo audit page.html --fail-under 80` exits 1 if score < 80
+  • Read `score_breakdown.components[]` to know *which* deduction to fix next
 
 EXAMPLES:
   aiseo audit ~/site/about.html
   aiseo audit ~/site/post.md | jq '{score, suggestions}'
+  aiseo audit page.html --fail-under 80          # CI gate
+  aiseo audit page.html | jq '.score_breakdown'  # see deductions
   aiseo audit page.html --quiet --json > audit.json";
 
 #[derive(Subcommand)]

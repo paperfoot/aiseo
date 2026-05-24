@@ -10,6 +10,7 @@ struct AuditEnvelope {
     file: String,
     file_type: &'static str,
     score: u32,
+    score_breakdown: audit::ScoreBreakdown,
     meta: audit::Meta,
     open_graph: audit::OpenGraph,
     twitter_card: audit::TwitterCard,
@@ -32,7 +33,7 @@ struct ContentSummary {
     has_credentials: bool,
 }
 
-pub fn run(ctx: Ctx, path: PathBuf) -> Result<(), AppError> {
+pub fn run(ctx: Ctx, path: PathBuf, fail_under: Option<u32>) -> Result<(), AppError> {
     let report = audit::audit_file(&path).map_err(|e| match e {
         AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
         AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
@@ -41,10 +42,13 @@ pub fn run(ctx: Ctx, path: PathBuf) -> Result<(), AppError> {
         AuditError::Io(e) => AppError::Io(e),
     })?;
 
+    let score = report.score;
+
     let envelope = AuditEnvelope {
         file: report.file,
         file_type: report.file_type,
         score: report.score,
+        score_breakdown: report.score_breakdown,
         meta: report.meta,
         open_graph: report.open_graph,
         twitter_card: report.twitter_card,
@@ -86,6 +90,14 @@ pub fn run(ctx: Ctx, path: PathBuf) -> Result<(), AppError> {
             }
         }
     });
+
+    // Quality gate. The audit JSON is already on stdout; this only flips
+    // the exit code so CI / agents can branch on pass / fail.
+    if let Some(threshold) = fail_under
+        && score < threshold
+    {
+        return Err(AppError::QualityGate { score, threshold });
+    }
 
     Ok(())
 }

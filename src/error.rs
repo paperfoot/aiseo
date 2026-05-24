@@ -23,6 +23,13 @@ pub enum AppError {
 
     #[error("Update failed: {0}")]
     Update(String),
+
+    /// Audit score is below the `--fail-under` threshold. Not really an
+    /// error — the audit succeeded, the page just didn't clear the gate.
+    /// Stdout already holds the full JSON; this only flips the exit code
+    /// so CI / agents can branch on it.
+    #[error("Audit score {score} below threshold {threshold}")]
+    QualityGate { score: u32, threshold: u32 },
 }
 
 impl AppError {
@@ -32,6 +39,7 @@ impl AppError {
             Self::Config(_) => 2,
             Self::RateLimited(_) => 4,
             Self::Transient(_) | Self::Io(_) | Self::Update(_) => 1,
+            Self::QualityGate { .. } => 1,
         }
     }
 
@@ -43,6 +51,7 @@ impl AppError {
             Self::RateLimited(_) => "rate_limited",
             Self::Io(_) => "io_error",
             Self::Update(_) => "update_error",
+            Self::QualityGate { .. } => "quality_gate",
         }
     }
 
@@ -62,6 +71,9 @@ impl AppError {
                 "Retry later, or install manually via cargo install ",
                 env!("CARGO_PKG_NAME")
             ),
+            Self::QualityGate { .. } => {
+                "Review stdout `.suggestions[]` and re-run after applying the fixes"
+            }
         }
     }
 }
