@@ -8,16 +8,24 @@ use serde::Serialize;
 use std::path::Path;
 
 mod content;
+mod entities;
+mod evidence;
 mod freshness;
+mod keywords;
 mod meta;
 mod position;
 mod suggest;
+mod voice;
 
 pub use content::ContentStructure;
+pub use entities::Entities;
+pub use evidence::Evidence;
 pub use freshness::Freshness;
+pub use keywords::Keywords;
 pub use meta::{Meta, OpenGraph, TwitterCard};
 pub use position::PositionBias;
 pub use suggest::ScoreBreakdown;
+pub use voice::Voice;
 
 #[derive(Serialize)]
 pub struct AuditReport {
@@ -28,6 +36,10 @@ pub struct AuditReport {
     pub twitter_card: TwitterCard,
     pub schema_types: Vec<String>,
     pub content: ContentStructure,
+    pub keywords: Keywords,
+    pub entities: Entities,
+    pub evidence: Evidence,
+    pub voice: Voice,
     pub position_bias: PositionBias,
     pub freshness: Freshness,
     pub score: u32,
@@ -73,6 +85,10 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
     let content = content::extract(&doc);
     let position_bias = position::analyze(&content.body_text);
     let freshness = freshness::analyze(&html_like, &schema_types);
+    let keywords = keywords::extract(&content.body_text);
+    let entities = entities::extract(&content.body_text);
+    let evidence = evidence::extract(&content.body_text);
+    let voice = voice::extract(&content.body_text, &schema_types, &html_like);
 
     let suggestions = suggest::build(&meta, &og, &content, &position_bias, &freshness, &schema_types);
     let score_breakdown = suggest::score_breakdown(&meta, &og, &content, &freshness, &schema_types);
@@ -86,6 +102,10 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
         twitter_card: tw,
         schema_types,
         content,
+        keywords,
+        entities,
+        evidence,
+        voice,
         position_bias,
         freshness,
         score,
