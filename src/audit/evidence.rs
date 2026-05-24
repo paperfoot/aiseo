@@ -1,9 +1,11 @@
 //! Evidence-density signals.
 //!
 //! Counts statistics, quote-like blocks, and flags claims that look like
-//! assertions but aren't backed by a citation marker. The validated 2026
-//! GEO tactics — statistics addition (+41%), named-authority quotes
-//! (+28%) — depend on these being present and visible.
+//! assertions but aren't backed by a citation marker. Princeton GEO
+//! (Aggarwal et al., KDD 2024, arXiv 2311.09735, Table 1 PAWC): quotation
+//! addition +41%, statistics addition +32%. Direction replicates on 2026
+//! engines; magnitudes were measured on GPT-3.5 in 2023 and the absolute
+//! numbers do not necessarily hold today.
 
 use once_cell::sync::Lazy;
 use regex::Regex;

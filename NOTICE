@@ -18,8 +18,14 @@ from `cli/engine/shared/constants.mjs`. The rule IDs (`side-tab`,
 `wide-tracking`) mirror Impeccable's taxonomy to preserve cross-tool
 comparability of audit results.
 
-Additions beyond Impeccable (`claude_fraunces_wave`, `shadcn_default_oklch`,
-`vercel_next_forge_default`) are original to aiseo.
+Additions beyond Impeccable (`anthropic_overused_font_2026`,
+`editorial_serif_wave`, `shadcn_default_oklch`, `vercel_next_forge_default`)
+are original to aiseo.
+
+The `anthropic_overused_font_2026` matcher uses the canonical list of
+overused fonts published in Anthropic's frontend-design skill at
+https://github.com/anthropics/skills (Apache-2.0 or similar OSS license —
+verify) for the overused-font canon used in `anthropic_overused_font_2026`.
 
 The Metatext detector (`src/audit/metatext.rs`) draws on the public
 catalogue of AI-writing tells maintained by the tbhb/vale-ai-tells

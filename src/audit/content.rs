@@ -191,14 +191,48 @@ fn headings(doc: &Html, tag: &str) -> Vec<String> {
         .collect()
 }
 
+/// Visible body text only. `scraper::Html::text()` walks every descendant
+/// text node including `<script>` and `<style>` bodies — which the v0.6
+/// stress test confirmed was poisoning every prose detector (avg word
+/// length of 43 chars on Linear, 33k "words" on a few-hundred-word page).
+///
+/// We walk the body element ourselves, descending only into nodes whose
+/// element name is not in the skip set.
 fn extract_body_text(doc: &Html) -> String {
-    let sel = Selector::parse("body").unwrap();
-    let body = doc.select(&sel).next();
-    let raw: String = match body {
-        Some(b) => b.text().collect::<Vec<_>>().join(" "),
-        None => doc.root_element().text().collect::<Vec<_>>().join(" "),
-    };
-    raw.split_whitespace().collect::<Vec<_>>().join(" ")
+    let body_sel = Selector::parse("body").unwrap();
+    let root_ref = doc.select(&body_sel).next().unwrap_or(doc.root_element());
+    let mut buf = String::with_capacity(8 * 1024);
+    // Iterative DFS over Node descendants. Skip the contents of script /
+    // style / noscript / template / svg / iframe / object / embed — these
+    // produce text nodes that scraper::text() would otherwise hoover up,
+    // poisoning every prose detector (v0.6 stress test caught this:
+    // avg word length 43 on Linear, 33k "words" on a short homepage).
+    let mut stack: Vec<_> = root_ref.children().rev().collect();
+    while let Some(node) = stack.pop() {
+        match node.value() {
+            scraper::Node::Text(t) => {
+                buf.push_str(t);
+                buf.push(' ');
+            }
+            scraper::Node::Element(el) => {
+                if skip_element(el.name()) {
+                    continue;
+                }
+                for child in node.children().rev() {
+                    stack.push(child);
+                }
+            }
+            _ => {}
+        }
+    }
+    buf.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn skip_element(name: &str) -> bool {
+    matches!(
+        name,
+        "script" | "style" | "noscript" | "template" | "svg" | "iframe" | "object" | "embed"
+    )
 }
 
 fn count_words(s: &str) -> usize {

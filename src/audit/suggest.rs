@@ -78,18 +78,18 @@ pub fn build(
     }
     if content.h2.len() < 2 {
         out.push(format!(
-            "{} H2s. 3..5 helps passage-level retrieval.",
+            "{} H2s. Use H2 to break the page into self-contained passages of ~120-180 words for passage-level retrieval (Perplexity / AI Mode fan-out).",
             content.h2.len()
         ));
     }
     if content.word_count >= 200 && content.word_count < 300 {
         out.push(format!(
-            "Body is {} words. Past 300 starts being competitive on AI Mode.",
+            "Body is {} words. ChatGPT comprehensive answers favour 1500-3000; Perplexity passages reward 120-180 word sections.",
             content.word_count
         ));
     } else if content.word_count >= 300 && content.word_count < 800 {
         out.push(format!(
-            "Body is {} words. 800..1500 tends to win on comprehensiveness.",
+            "Body is {} words. ChatGPT comprehensive answers favour 1500-3000; Perplexity passages reward 120-180 word sections.",
             content.word_count
         ));
     }
@@ -114,13 +114,12 @@ pub fn build(
     if schema_types.is_empty() {
         out.push("No JSON-LD. Article + Organization at minimum; FAQ for question pages.".into());
     }
-    // FAQ schema spam — Google retired FAQ rich results on 7 May 2026.
-    // FAQPage on a light page is now cargo cult: zero rich-result benefit,
-    // and the Ahrefs Apr-2026 study found schema density correlates with
-    // -4.6% AI Overview citations.
+    // FAQPage schema is still valid; Google retired the SERP rich result
+    // on 7 May 2026 but the schema itself is fine. Safe to keep on
+    // FAQ-heavy pages, just redundant on light ones.
     if schema_types.iter().any(|t| t == "FAQPage") && content.word_count < 800 {
         out.push(
-            "FAQPage schema on a light page. Google retired FAQ rich results 7 May 2026; on thin content it's cargo cult."
+            "FAQPage schema is still valid (just no longer gets SERP rich result post 7 May 2026 Google retirement); safe to keep on FAQ-heavy pages but redundant on light pages."
                 .into(),
         );
     }
@@ -277,10 +276,13 @@ fn deductions(
             reason: "Body under 300 words",
         });
     }
+    // TL;DR deduction lowered from 5 to 2: the widely-cited "+35% lift"
+    // came from one Mumbai SEO agency blog with no methodology, since
+    // debunked. Position-bias (Indig's 44% finding) holds and stays.
     if !content.has_tldr && content.word_count >= 150 {
         out.push(ScoreComponent {
             name: "tldr",
-            deducted: 5,
+            deducted: 2,
             reason: "No TL;DR detected",
         });
     }
@@ -349,13 +351,16 @@ fn deductions(
         _ => {}
     }
     // Information Gain: only deduct for pages long enough to plausibly
-    // carry evidence. The 5-to-7 rule benchmark is the band — below 2 is
-    // a real penalty, 2..4 is a soft penalty.
+    // carry evidence. Information Gain is an SEO-community frame (Indig /
+    // Search Engine Land), not a Google-acknowledged ranking signal. The
+    // patent (US20200349181A1) exists but Google has never confirmed it
+    // weighs ranking. Cap the max deduction at 10 (was 15) to reflect that
+    // uncertainty — below 2 is a real penalty, 2..4 is a soft penalty.
     if content.word_count >= 300 {
         match info_gain.score {
             0..=1 => out.push(ScoreComponent {
                 name: "information_gain",
-                deducted: 15,
+                deducted: 10,
                 reason: "Low Information Gain (rewritten / templated)",
             }),
             2..=4 => out.push(ScoreComponent {

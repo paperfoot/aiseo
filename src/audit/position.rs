@@ -1,7 +1,7 @@
-//! Position-bias analysis. Zyppy's 2025 study (promoted by iPullRank) found
-//! ~44% of ChatGPT citations sit in the first ~30% of a page. Flag when
-//! high-leverage signals — TL;DR, first statistic, first credential mention
-//! — sit below that mark.
+//! Position-bias analysis. Indig's Feb 2026 study (growth-memo.com, n=18,012
+//! ChatGPT citations) found 44.2% of citations come from the first 30% of
+//! body text. Flag when high-leverage signals — TL;DR, first statistic,
+//! first credential mention — sit below that mark.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -55,6 +55,8 @@ pub fn analyze(body_text: &str) -> PositionBias {
     let cred_pct = pct(cred_off);
 
     let mut warnings = Vec::new();
+    // The 10% TL;DR threshold is engineering judgement; Indig's data supports
+    // 30% as the primary citation-window boundary.
     if let Some(p) = tldr_pct
         && p > 10.0
     {

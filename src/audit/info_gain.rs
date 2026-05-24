@@ -1,14 +1,15 @@
 //! Information Gain proxy.
 //!
-//! Google's March 2026 Core Update made Information Gain a dominant
-//! content-quality signal. Pages with proprietary data and first-hand
-//! evidence climbed; templated rewrites and AI content farms collapsed.
-//! This module counts the deterministic, locally-detectable signals
-//! that proxy for original first-party data.
+//! Information Gain is an SEO-community frame (Indig / Search Engine Land),
+//! not a Google-acknowledged ranking signal. The patent (US20200349181A1)
+//! exists but Google has never confirmed it weighs ranking. This module
+//! counts the deterministic, locally-detectable signals that proxy for
+//! original first-party data — useful as a content-quality heuristic
+//! regardless of whether any specific algorithm consumes it.
 //!
-//! Scoring uses the "5-to-7 rule" from the April 2026 follow-up
-//! research: 0–2 unique signals reads as rewritten content; 5–7
-//! competes; 8+ leads. Score is a 0–10 integer surfaced on every audit.
+//! Scoring uses the "5-to-7 rule" from Indig's follow-up writeups:
+//! 0–2 unique signals reads as rewritten content; 5–7 competes; 8+ leads.
+//! Score is a 0–10 integer surfaced on every audit.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -162,9 +163,13 @@ pub fn suggestion(ig: &InformationGain, word_count: usize) -> Option<String> {
     if word_count < 300 {
         return None;
     }
+    // Information Gain is an SEO-community frame (Indig / Search Engine Land),
+    // not a Google-acknowledged ranking signal. The patent (US20200349181A1)
+    // exists but Google has never confirmed it weighs ranking. Treat the
+    // 5-to-7 rule as a content-quality heuristic, not a ranking guarantee.
     match ig.score {
         0..=1 => Some(format!(
-            "Information Gain {}/10. Rewritten / templated content reads weak post-March-2026 core update. Add named-source quotes, sample sizes (n=…), YoY deltas, first-party evidence.",
+            "Information Gain {}/10. Rewritten / templated content reads weak. Add named-source quotes, sample sizes (n=…), YoY deltas, first-party evidence.",
             ig.score
         )),
         2..=4 => Some(format!(

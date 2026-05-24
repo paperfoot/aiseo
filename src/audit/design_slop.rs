@@ -13,7 +13,16 @@
 //! `cli/engine/shared/constants.mjs`. See NOTICE for attribution.
 //!
 //! Additions beyond impeccable:
-//!   - `claude_fraunces_wave`     the 2026 Anthropic frontend-design tell
+//!   - `anthropic_overused_font_2026` fonts named in Anthropic's official
+//!     frontend-design skill at
+//!     https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md
+//!     (Inter, Roboto, Arial, system fonts, Space Grotesk). Sourced
+//!     directly from Anthropic's published list of fonts to avoid.
+//!   - `editorial_serif_wave`     community-observed (not Anthropic-named)
+//!     Fraunces / Recoleta / Newsreader / Tiempos cluster paired with
+//!     warm-brown italic — flagged by Paul Bakaus and 2026 designer
+//!     commentary as a converging Claude-artefact aesthetic. Lower
+//!     confidence than the Anthropic-named list.
 //!   - `shadcn_default_oklch`     unmodified shadcn `:root` palette
 //!   - `vercel_next_forge_default` next-forge + geist + shadcn combo
 
@@ -138,16 +147,29 @@ static MATCHERS: Lazy<Vec<Matcher>> = Lazy::new(|| {
             r"(?i)fonts\.googleapis\.com/css2?\?family=(Inter|Roboto|Open\+Sans|Lato|Montserrat|Fraunces|Plus\+Jakarta\+Sans|Space\+Grotesk|Instrument\+Sans|Mona\+Sans|Geist)\b",
             |c, _| Some(format!("Google Fonts: {}", c[1].replace('+', " "))),
         ),
-        // ── claude_fraunces_wave: the 2026 Anthropic tell — Fraunces + italic
-        //    headings + warm-brown editorial palette (#3-#4 from X chatter)
+        // ── anthropic_overused_font_2026: fonts named in Anthropic's official
+        //    frontend-design skill at
+        //    https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md
+        //    Anthropic's published list of fonts-to-avoid: Inter, Roboto,
+        //    Arial, system fonts, Space Grotesk.
         mk(
-            "claude_fraunces_wave",
+            "anthropic_overused_font_2026",
+            r#"(?i)font-family\s*:\s*['"]?(Inter|Roboto|Arial|Space Grotesk)\b"#,
+            |c, _| Some(c[1].to_string()),
+        ),
+        // ── editorial_serif_wave: Fraunces / Recoleta / Newsreader / Tiempos
+        //    paired with warm-brown italic. Not in Anthropic's official
+        //    slop-list, but flagged by Paul Bakaus and other 2026 designer
+        //    commentary as a converging Claude-artefact aesthetic. Lower
+        //    confidence than the Anthropic-named matcher above.
+        mk(
+            "editorial_serif_wave",
             r#"(?i)font-family\s*:\s*['"]?(Fraunces|Recoleta|Newsreader|Tiempos)\b"#,
             |c, line| {
                 let italic = Regex::new(r"(?i)font-style\s*:\s*italic|\bitalic\b").unwrap();
                 let warm = Regex::new(r"#(?:7c2d12|92400e|9a3412|c2410c|d97706|b45309|78350f|fef3c7|fed7aa|fffbeb)\b").unwrap();
                 if italic.is_match(line) || warm.is_match(line) {
-                    Some(format!("{} + italic / warm palette", &c[1]))
+                    Some(format!("{} + italic / warm palette (community-observed)", &c[1]))
                 } else {
                     None
                 }
