@@ -48,6 +48,30 @@ pub fn run() {
                     "suggestions": "[string, ...]"
                 }
             },
+            "fetch": {
+                "description": "Fetch a live URL and audit the response body. Same envelope as `audit` plus a `fetched` metadata block. Use this for deployed pages and competitor audits.",
+                "args": [
+                    {
+                        "name": "url",
+                        "kind": "positional",
+                        "type": "string",
+                        "required": true,
+                        "description": "HTTP/HTTPS URL"
+                    }
+                ],
+                "options": [
+                    {
+                        "name": "--fail-under",
+                        "type": "int",
+                        "required": false,
+                        "description": "Exit 1 if score below threshold"
+                    }
+                ],
+                "output_shape": {
+                    "fetched": "{ url, status, content_type, bytes, fetched_at }",
+                    "...": "all `audit` fields (file, score, meta, content, keywords, entities, evidence, voice, position_bias, freshness, suggestions)"
+                }
+            },
             "schema": {
                 "description": "Generate a JSON-LD block for a given schema.org type. Output is ready to paste into a <script type=\"application/ld+json\"> block.",
                 "subcommands": {

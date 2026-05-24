@@ -38,6 +38,16 @@ pub enum Commands {
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
     },
+    /// Fetch a live URL and audit the response body. Same envelope as
+    /// `audit` plus a `fetched: { url, status, content_type, bytes }` block.
+    #[command(after_long_help = FETCH_HELP)]
+    Fetch {
+        /// HTTP/HTTPS URL to fetch and audit.
+        url: String,
+        /// Exit 1 if the audit score is below this threshold.
+        #[arg(long, value_name = "SCORE")]
+        fail_under: Option<u32>,
+    },
     /// Generate a JSON-LD block for a given schema.org type. Output is
     /// ready to paste into a `<script type="application/ld+json">` block.
     #[command(after_long_help = SCHEMA_HELP)]
@@ -71,6 +81,17 @@ pub enum Commands {
         code: i32,
     },
 }
+
+const FETCH_HELP: &str = "\
+TIPS:
+  • For local files, use `audit` instead — no network, no rate limit
+  • Network errors are exit code 1 (transient) — retry
+  • Use `--fail-under` for CI gates that test live deployments
+
+EXAMPLES:
+  aiseo fetch https://example.com/about
+  aiseo fetch https://example.com --fail-under 75
+  aiseo fetch https://example.com | jq '.score_breakdown.components'";
 
 const SCHEMA_HELP: &str = "\
 EXAMPLES:
