@@ -98,9 +98,25 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
         .map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))?;
 
     let score = input.score;
-    let file = h(input.file_label);
+    let file_label = input.file_label;
+    let page_title = env
+        .get("meta")
+        .and_then(|m| m.get("title"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    // Prefer the page's own <title> for the report headline. Stdin-mode
+    // auditing previously rendered "<stdin>" as the H1 — useless and ugly.
+    let display_title = page_title.unwrap_or(file_label);
+    let file_h = h(file_label);
+    let title_h = h(display_title);
     let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let version = env!("CARGO_PKG_VERSION");
+    let source_line = if page_title.is_some() && file_label != display_title {
+        format!(r#"<div class="src">source .. {file_h}</div>"#)
+    } else {
+        String::new()
+    };
 
     let score_pill = format!(
         r#"<span class="pill {}">{}/100</span>"#,
@@ -112,8 +128,9 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
 
     body.push_str(&format!(
         r#"<header>
-  <h1>{file}</h1>
+  <h1>{title_h}</h1>
   <div class="sub">aiseo audit .. {date} .. {score_pill}</div>
+  {source_line}
 </header>
 "#
     ));
@@ -171,17 +188,73 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
         "og:image",
         env.get("open_graph").and_then(|o| o.get("image")),
     );
+    body.push_str("</table>\n");
+
+    // ── Indexing (canonical / robots / viewport / favicon / hreflang) ───────
+    body.push_str("<h2>Indexing</h2>\n<table>\n");
     push_kv(
         &mut body,
-        "Modified",
-        env.get("freshness").and_then(|f| f.get("date_modified")),
+        "Canonical",
+        env.get("meta").and_then(|m| m.get("canonical")),
     );
     push_kv(
         &mut body,
-        "Published",
-        env.get("freshness").and_then(|f| f.get("date_published")),
+        "Robots",
+        env.get("meta").and_then(|m| m.get("robots")),
+    );
+    push_kv(
+        &mut body,
+        "Viewport",
+        env.get("meta").and_then(|m| m.get("viewport")),
+    );
+    push_kv_bool(
+        &mut body,
+        "Favicon",
+        env.get("meta").and_then(|m| m.get("favicon")),
+    );
+    push_kv_join(
+        &mut body,
+        "hreflang",
+        env.get("content").and_then(|c| c.get("hreflangs")).and_then(|v| v.as_array()),
+    );
+    push_kv(
+        &mut body,
+        "noscript fallback",
+        env.get("content").and_then(|c| c.get("noscript_kind")),
     );
     body.push_str("</table>\n");
+
+    // ── Freshness (always shows; collapses to a single line if all absent) ──
+    let date_mod = env.get("freshness").and_then(|f| f.get("date_modified"));
+    let date_pub = env.get("freshness").and_then(|f| f.get("date_published"));
+    let any_date = date_mod.is_some_and(|v| !v.is_null()) || date_pub.is_some_and(|v| !v.is_null());
+    if any_date {
+        body.push_str("<h2>Freshness</h2>\n<table>\n");
+        push_kv_skip_empty(&mut body, "Modified", date_mod);
+        push_kv_skip_empty(&mut body, "Published", date_pub);
+        push_kv_skip_empty(
+            &mut body,
+            "Days since modified",
+            env.get("freshness").and_then(|f| f.get("days_since_modified")),
+        );
+        if let Some(years) = env
+            .get("freshness")
+            .and_then(|f| f.get("year_mentions"))
+            .and_then(|v| v.as_array())
+            && !years.is_empty()
+        {
+            let years_str = years
+                .iter()
+                .filter_map(|y| y.as_u64().map(|n| n.to_string()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            body.push_str(&format!(
+                "  <tr><td class=\"label\">Year mentions in body</td><td>{}</td></tr>\n",
+                h(&years_str)
+            ));
+        }
+        body.push_str("</table>\n");
+    }
 
     // ── Signals (content shape + position-bias) ─────────────────────────────
     body.push_str("<h2>Signals</h2>\n<table>\n");
@@ -197,11 +270,23 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
         push_kv(&mut body, "Images", c.get("image_count"));
         push_kv(&mut body, "Images w/o alt", c.get("missing_alt_count"));
         push_kv(&mut body, "html lang", c.get("html_lang"));
+        push_kv(&mut body, "Tables", c.get("table_count"));
+        push_kv(&mut body, "Quotable sentences (5–25 words)", c.get("quotable_sentence_count"));
+        if let Some(d) = c.get("duplicate_heading_count").and_then(|v| v.as_u64())
+            && d > 0
+        {
+            body.push_str(&format!(
+                "  <tr><td class=\"label\">Duplicate headings</td><td>{}</td></tr>\n",
+                d
+            ));
+        }
     }
+    // Position-bias rows: only show when actually computed. TL;DR position
+    // and First credential are noise when neither exists.
     if let Some(p) = env.get("position_bias") {
-        push_kv_pct(&mut body, "TL;DR position", p.get("tldr_position_pct"));
-        push_kv_pct(&mut body, "First statistic", p.get("first_stat_position_pct"));
-        push_kv_pct(&mut body, "First credential", p.get("first_credential_position_pct"));
+        push_kv_pct_skip_empty(&mut body, "TL;DR position", p.get("tldr_position_pct"));
+        push_kv_pct_skip_empty(&mut body, "First statistic position", p.get("first_stat_position_pct"));
+        push_kv_pct_skip_empty(&mut body, "First credential position", p.get("first_credential_position_pct"));
     }
     body.push_str("</table>\n");
 
@@ -316,9 +401,10 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
     // ── Copy precision detail (densities + counts) ──────────────────────────
     if let Some(cp) = env.get("copy_precision") {
         let score = cp.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let verdict = cp.get("verdict").and_then(|v| v.as_str()).unwrap_or("");
         body.push_str(&format!(
-            "<h2>Copy precision</h2>\n<p class=\"small\">{:.1} / 10</p>\n<table>\n",
-            score
+            "<h2>Copy precision</h2>\n<p class=\"small\">{:.1} / 10 ({})</p>\n<table>\n",
+            score, verdict
         ));
         if let Some(dens) = cp.get("densities").and_then(|v| v.as_object()) {
             let mut keys: Vec<&String> = dens.keys().collect();
@@ -327,7 +413,8 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
                 let v = dens.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
                 body.push_str(&format!(
                     "  <tr><td class=\"label\">{}</td><td>{:.2}</td></tr>\n",
-                    h(k), v
+                    h(&human_label(k)),
+                    v
                 ));
             }
         }
@@ -354,7 +441,8 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
                 if let Some(n) = counts.get(k).and_then(|v| v.as_u64()) {
                     body.push_str(&format!(
                         "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
-                        h(k), n
+                        h(&human_label(k)),
+                        n
                     ));
                 }
             }
@@ -488,28 +576,8 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
         }
     }
 
-    // ── Freshness (full block) ──────────────────────────────────────────────
-    if let Some(f) = env.get("freshness") {
-        body.push_str("<h2>Freshness</h2>\n<table>\n");
-        push_kv(&mut body, "dateModified", f.get("date_modified"));
-        push_kv(&mut body, "datePublished", f.get("date_published"));
-        push_kv(&mut body, "Days since modified", f.get("days_since_modified"));
-        push_kv(&mut body, "Current year", f.get("current_year"));
-        if let Some(years) = f.get("year_mentions").and_then(|v| v.as_array())
-            && !years.is_empty()
-        {
-            let years_str = years
-                .iter()
-                .filter_map(|y| y.as_u64().map(|n| n.to_string()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            body.push_str(&format!(
-                "  <tr><td class=\"label\">Year mentions</td><td>{}</td></tr>\n",
-                h(&years_str)
-            ));
-        }
-        body.push_str("</table>\n");
-    }
+    // (Freshness block now rendered earlier under the Indexing surface so
+    // related metadata sits together.)
 
     // ── Headings in order (sanity table) ────────────────────────────────────
     if let Some(headings) = env
@@ -541,7 +609,7 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>aiseo .. {file}</title>
+<title>aiseo .. {title_h}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {{
@@ -570,6 +638,16 @@ fn render_html<E: Serialize>(input: &ReportInput<'_, E>) -> Result<String, AppEr
   .sub {{
     color: var(--soft);
     font-size: .92rem;
+    font-style: italic;
+  }}
+  .src {{
+    color: var(--soft);
+    font-size: .82rem;
+    margin-top: .25rem;
+    word-break: break-all;
+  }}
+  .empty {{
+    color: var(--soft);
     font-style: italic;
   }}
   h2 {{
@@ -640,41 +718,106 @@ fn score_band(score: u32) -> &'static str {
 }
 
 fn push_kv(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
-    let val = v
-        .and_then(|v| match v {
-            serde_json::Value::Null => None,
-            serde_json::Value::String(s) if s.is_empty() => None,
-            serde_json::Value::String(s) => Some(s.clone()),
-            serde_json::Value::Number(n) => Some(n.to_string()),
-            serde_json::Value::Bool(b) => Some(if *b { "yes".into() } else { "no".into() }),
-            _ => Some(v.to_string()),
-        })
-        .unwrap_or_else(|| "—".to_string());
-    out.push_str(&format!(
-        "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
-        h(label),
-        h(&val)
-    ));
+    let val = v.and_then(|v| match v {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) if s.is_empty() => None,
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(if *b { "yes".into() } else { "no".into() }),
+        _ => Some(v.to_string()),
+    });
+    match val {
+        Some(s) => out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
+            h(label),
+            h(&s)
+        )),
+        None => out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td class=\"empty\">not detected</td></tr>\n",
+            h(label)
+        )),
+    }
+}
+
+/// Skip the row entirely when the value is null/empty — for sections that
+/// don't benefit from documenting absence (per-position percentages, etc.).
+fn push_kv_skip_empty(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
+    let val = v.and_then(|v| match v {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) if s.is_empty() => None,
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(if *b { "yes".into() } else { "no".into() }),
+        _ => Some(v.to_string()),
+    });
+    if let Some(s) = val {
+        out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
+            h(label),
+            h(&s)
+        ));
+    }
 }
 
 fn push_kv_join(out: &mut String, label: &str, v: Option<&Vec<serde_json::Value>>) {
-    let val = v
-        .map(|arr| {
-            if arr.is_empty() {
-                "—".to_string()
-            } else {
+    let val = v.and_then(|arr| {
+        if arr.is_empty() {
+            None
+        } else {
+            Some(
                 arr.iter()
                     .filter_map(|x| x.as_str().map(str::to_string))
                     .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        })
-        .unwrap_or_else(|| "—".to_string());
-    out.push_str(&format!(
-        "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
-        h(label),
-        h(&val)
-    ));
+                    .join(", "),
+            )
+        }
+    });
+    match val {
+        Some(s) => out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
+            h(label),
+            h(&s)
+        )),
+        None => out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td class=\"empty\">not detected</td></tr>\n",
+            h(label)
+        )),
+    }
+}
+
+/// Human label for a metric ID like `hedge_per_1k`. Falls back to a
+/// title-cased version of the snake_case key for anything unknown so the
+/// report degrades gracefully when new densities are added.
+fn human_label(key: &str) -> String {
+    match key {
+        // copy_precision densities
+        "avg_word_length_chars" => "Average word length (chars)".into(),
+        "concrete_per_100_words" => "Concrete nouns + numbers per 100 words".into(),
+        "empty_emphasis_per_1k" => "Empty-emphasis adjectives per 1,000 words".into(),
+        "filler_per_1k" => "Filler words per 1,000 words".into(),
+        "hedge_per_1k" => "Hedge words per 1,000 words".into(),
+        "ly_per_1k" => "-ly adverbs per 1,000 words".into(),
+        "passive_per_1k" => "Passive voice per 1,000 words".into(),
+        "sentence_length_var_ratio" => "Sentence-length variance (σ/μ)".into(),
+        // information_gain counts
+        "named_quotes" => "Named-source quotes".into(),
+        "sample_sizes" => "Sample sizes (n=…)".into(),
+        "yoy_deltas" => "Year-over-year deltas".into(),
+        "first_person_evidence" => "First-person evidence".into(),
+        "method_disclosure" => "Method disclosure".into(),
+        "numbered_citations" => "Numbered citations".into(),
+        _ => key
+            .split('_')
+            .map(|w| {
+                let mut c = w.chars();
+                match c.next() {
+                    Some(first) => first.to_uppercase().chain(c).collect::<String>(),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+    }
 }
 
 fn push_kv_count(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
@@ -696,16 +839,16 @@ fn push_kv_bool(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
     ));
 }
 
-fn push_kv_pct(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
-    let s = match v.and_then(|v| v.as_f64()) {
-        Some(p) => format!("{p:.1}%"),
-        None => "—".to_string(),
-    };
-    out.push_str(&format!(
-        "  <tr><td class=\"label\">{}</td><td>{}</td></tr>\n",
-        h(label),
-        h(&s)
-    ));
+/// Suppress the row when the value is absent — position-bias percentages
+/// add no information when the signal isn't there.
+fn push_kv_pct_skip_empty(out: &mut String, label: &str, v: Option<&serde_json::Value>) {
+    if let Some(p) = v.and_then(|v| v.as_f64()) {
+        out.push_str(&format!(
+            "  <tr><td class=\"label\">{}</td><td>{:.1}%</td></tr>\n",
+            h(label),
+            p
+        ));
+    }
 }
 
 fn h(s: &str) -> String {

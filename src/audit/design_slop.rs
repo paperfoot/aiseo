@@ -176,16 +176,28 @@ static MATCHERS: Lazy<Vec<Matcher>> = Lazy::new(|| {
             },
         ),
         // ── pure-black-white (CSS) ───────────────────────────────────────────
+        // Single bg-black or `background: #000` doesn't make a palette
+        // pure-black; many minimalist sites use it for one accent block.
+        // Only flag when the same line also references `#fff*` / `white`
+        // — a real two-tone-only palette.
         mk(
             "pure-black-white",
             r"(?i)background(?:-color)?\s*:\s*(#000000|#000|rgb\(\s*0\s*,\s*0\s*,\s*0\s*\))\b",
-            |c, _| Some(c[0].to_string()),
+            |c, line| {
+                let pairs = Regex::new(r"(?i)#fff(fff)?\b|\bwhite\b").unwrap();
+                if pairs.is_match(line) { Some(c[0].to_string()) } else { None }
+            },
         ),
         // ── pure-black-white (Tailwind bg-black) ─────────────────────────────
+        // Require bg-black + (text-white | bg-white) on the same line —
+        // a one-off bg-black accent block is intentional minimalism, not slop.
         mk(
             "pure-black-white",
             r"\bbg-black\b",
-            |c, _| Some(c[0].to_string()),
+            |c, line| {
+                let paired = Regex::new(r"\b(text-white|bg-white)\b").unwrap();
+                if paired.is_match(line) { Some(c[0].to_string()) } else { None }
+            },
         ),
         // ── gradient-text (CSS) ──────────────────────────────────────────────
         mk(

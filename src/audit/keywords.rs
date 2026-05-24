@@ -43,8 +43,19 @@ static STOP_WORDS: &[&str] = &[
     "yourselves",
 ];
 
-static SENTENCE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]+").unwrap());
 static WORD: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b[a-zA-Z][a-zA-Z\-']{2,}\b").unwrap());
+// Real questions only: a sentence ending in `?` whose first word is a
+// genuine interrogative ("What/Why/How/When/Where/Who/Which/Is/Are/Do/
+// Does/Can/Should/Will/Could/Would/May/Might"). The previous detector
+// appended `?` to any sentence starting with "what/how/is/are/can"
+// which fabricated questions out of statements; a naïve `[A-Z]…\?` regex
+// over-grabs across run-together nav text without punctuation.
+static QUESTION_SENTENCE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?m)(?:^|[.!?]\s+|\n\s*)((?:What|Why|How|When|Where|Who|Which|Is|Are|Do|Does|Can|Should|Will|Could|Would|May|Might)\b[^.!?\n]{3,180}\?)",
+    )
+    .unwrap()
+});
 
 pub fn extract(body_text: &str) -> Keywords {
     let stop: HashSet<&str> = STOP_WORDS.iter().copied().collect();
@@ -80,30 +91,15 @@ pub fn extract(body_text: &str) -> Keywords {
         }
     }
 
-    let questions: Vec<String> = SENTENCE_END
-        .split(body_text)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .filter_map(|s| {
-            // SENTENCE_END strips punctuation, so we look at the original
-            // text up to where the next `?` lands to keep `?` sentences.
-            // Simpler: just keep sentences whose first word is a question
-            // word, OR that the original text marks with `?`.
-            None.or_else(|| {
-                let lower = s.to_ascii_lowercase();
-                let starts_with_question = [
-                    "what ", "why ", "how ", "when ", "where ", "who ", "which ", "is ", "are ",
-                    "do ", "does ", "can ", "should ", "will ",
-                ]
-                .iter()
-                .any(|w| lower.starts_with(w));
-                if starts_with_question {
-                    Some(format!("{s}?"))
-                } else {
-                    None
-                }
-            })
-        })
+    // Only sentences that actually end with `?` and start with an
+    // interrogative count as questions. Capture group 1 holds the
+    // question itself (without the leading sentence-boundary prefix).
+    let mut seen_q: HashSet<String> = HashSet::new();
+    let questions: Vec<String> = QUESTION_SENTENCE
+        .captures_iter(body_text)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+        .map(|q| q.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|q| seen_q.insert(q.to_ascii_lowercase()))
         .take(10)
         .collect();
 

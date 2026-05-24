@@ -33,6 +33,21 @@ pub struct ContentStructure {
     /// boilerplate "please enable JavaScript" message it's a quality
     /// problem rather than a real fallback.
     pub noscript_kind: NoscriptKind,
+    /// `<table>` count outside chrome. Perplexity and AI Mode lift
+    /// pages with comparison tables; near-zero on doc-style pages is
+    /// a signal to add at least one.
+    pub table_count: usize,
+    /// Empty headings (whitespace-only `<h1>..<h6>`). Confuse crawlers
+    /// and assistive tech — should be deleted, not styled invisible.
+    pub empty_heading_count: usize,
+    /// Duplicate headings (same text appears under more than one level
+    /// or twice at the same level outside chrome). Indicates templated
+    /// boilerplate or accidental copy-paste.
+    pub duplicate_heading_count: usize,
+    /// Sentences in the 5..25 word window with at least one terminal
+    /// punctuation. Proxy for direct-quotable sentences — what ChatGPT,
+    /// Claude, and Perplexity cite verbatim.
+    pub quotable_sentence_count: usize,
     /// Plain-text body, normalised whitespace. Kept here so downstream
     /// modules (position bias, suggestions) don't re-extract it.
     #[serde(skip_serializing)]
@@ -71,6 +86,10 @@ static AUTHOR_RE: Lazy<Regex> =
 pub fn extract(doc: &Html) -> ContentStructure {
     let body_text = extract_body_text(doc);
 
+    // Headings are filtered to drop those nested inside page chrome
+    // (<nav>, <header>, <footer>, <aside>) — footer column titles
+    // (Company / Programs / Connect) used to false-trigger the
+    // hierarchy-skip check on every site with a multi-column footer.
     let h1 = headings(doc, "h1");
     let h2 = headings(doc, "h2");
     let h3 = headings(doc, "h3");
@@ -82,6 +101,10 @@ pub fn extract(doc: &Html) -> ContentStructure {
     let headings_in_order = extract_headings_in_order(doc);
     let hreflangs = extract_hreflangs(doc);
     let noscript_kind = classify_noscript(doc);
+    let table_count = count_tables(doc);
+    let (empty_heading_count, duplicate_heading_count) =
+        analyze_heading_quality(&headings_in_order);
+    let quotable_sentence_count = count_quotable_sentences(&body_text);
 
     ContentStructure {
         word_count: count_words(&body_text),
@@ -98,13 +121,54 @@ pub fn extract(doc: &Html) -> ContentStructure {
         headings_in_order,
         hreflangs,
         noscript_kind,
+        table_count,
+        empty_heading_count,
+        duplicate_heading_count,
+        quotable_sentence_count,
         body_text,
     }
+}
+
+fn count_tables(doc: &Html) -> usize {
+    let sel = Selector::parse("table").unwrap();
+    doc.select(&sel).filter(|el| !is_in_chrome(*el)).count()
+}
+
+fn analyze_heading_quality(headings: &[HeadingOrderEntry]) -> (usize, usize) {
+    // Empty was filtered upstream, so this counts zero-text headings that
+    // somehow survived (defensive). The duplicate count is the real value:
+    // identical text at the same or different levels.
+    let empty = headings.iter().filter(|h| h.text.trim().is_empty()).count();
+
+    let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for h in headings {
+        let key = h.text.trim().to_ascii_lowercase();
+        if !key.is_empty() {
+            *seen.entry(key).or_insert(0) += 1;
+        }
+    }
+    let duplicates = seen.values().filter(|n| **n > 1).map(|n| n - 1).sum();
+    (empty, duplicates)
+}
+
+static QUOTABLE_SPLIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]+\s+").unwrap());
+
+fn count_quotable_sentences(body_text: &str) -> usize {
+    QUOTABLE_SPLIT
+        .split(body_text)
+        .filter(|s| {
+            let words = s.split_whitespace().count();
+            // 5..25 word window — too short isn't quotable, too long
+            // gets paraphrased.
+            (5..=25).contains(&words)
+        })
+        .count()
 }
 
 fn extract_headings_in_order(doc: &Html) -> Vec<HeadingOrderEntry> {
     let sel = Selector::parse("h1, h2, h3, h4, h5, h6").unwrap();
     doc.select(&sel)
+        .filter(|el| !is_in_chrome(*el))
         .filter_map(|el| {
             let name = el.value().name();
             let level: u8 = name.strip_prefix('h')?.parse().ok()?;
@@ -120,6 +184,31 @@ fn extract_headings_in_order(doc: &Html) -> Vec<HeadingOrderEntry> {
             Some(HeadingOrderEntry { level, text })
         })
         .collect()
+}
+
+/// True when the element sits inside `<nav>`, `<footer>`, `<aside>`, or a
+/// banner-style `<header>` (one containing a nav). Article-page hero
+/// `<header>` elements are NOT chrome — they typically wrap the H1 + dek
+/// and represent real content.
+fn is_in_chrome(el: scraper::ElementRef<'_>) -> bool {
+    let mut node = el.parent();
+    while let Some(n) = node {
+        if let scraper::Node::Element(elem) = n.value() {
+            match elem.name() {
+                "nav" | "footer" | "aside" => return true,
+                "header" => {
+                    if let Some(eref) = scraper::ElementRef::wrap(n)
+                        && header_is_banner(eref)
+                    {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        node = n.parent();
+    }
+    false
 }
 
 fn extract_hreflangs(doc: &Html) -> Vec<String> {
@@ -186,6 +275,7 @@ fn extract_html_lang(doc: &Html) -> Option<String> {
 fn headings(doc: &Html, tag: &str) -> Vec<String> {
     let sel = Selector::parse(tag).unwrap();
     doc.select(&sel)
+        .filter(|el| !is_in_chrome(*el))
         .map(|el| el.text().collect::<String>().split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|s| !s.is_empty())
         .collect()
@@ -196,17 +286,17 @@ fn headings(doc: &Html, tag: &str) -> Vec<String> {
 /// stress test confirmed was poisoning every prose detector (avg word
 /// length of 43 chars on Linear, 33k "words" on a few-hundred-word page).
 ///
-/// We walk the body element ourselves, descending only into nodes whose
-/// element name is not in the skip set.
+/// We walk the body (or `<main>` if present) ourselves, descending only
+/// into nodes whose element name is not in the skip set.
+///
+/// Skips:
+///   - non-prose: script, style, noscript, template, svg, iframe, object, embed
+///   - page chrome: nav, header, footer, aside (these poison the
+///     featured-snippet candidate with "Skip to main content Home …" and
+///     inflate the word count with link text)
 fn extract_body_text(doc: &Html) -> String {
-    let body_sel = Selector::parse("body").unwrap();
-    let root_ref = doc.select(&body_sel).next().unwrap_or(doc.root_element());
+    let root_ref = pick_content_root(doc);
     let mut buf = String::with_capacity(8 * 1024);
-    // Iterative DFS over Node descendants. Skip the contents of script /
-    // style / noscript / template / svg / iframe / object / embed — these
-    // produce text nodes that scraper::text() would otherwise hoover up,
-    // poisoning every prose detector (v0.6 stress test caught this:
-    // avg word length 43 on Linear, 33k "words" on a short homepage).
     let mut stack: Vec<_> = root_ref.children().rev().collect();
     while let Some(node) = stack.pop() {
         match node.value() {
@@ -216,6 +306,15 @@ fn extract_body_text(doc: &Html) -> String {
             }
             scraper::Node::Element(el) => {
                 if skip_element(el.name()) {
+                    continue;
+                }
+                // <header> is descended into by default; only a banner-style
+                // header (one that contains a <nav>) gets skipped so we don't
+                // drop hero text on article pages.
+                if el.name() == "header"
+                    && let Some(eref) = scraper::ElementRef::wrap(node)
+                    && header_is_banner(eref)
+                {
                     continue;
                 }
                 for child in node.children().rev() {
@@ -228,10 +327,46 @@ fn extract_body_text(doc: &Html) -> String {
     buf.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A `<header>` containing a `<nav>` descendant is a site banner — skip it.
+/// A `<header>` without nav is usually an article hero (page title + dek)
+/// and counts as content.
+fn header_is_banner(el: scraper::ElementRef<'_>) -> bool {
+    let nav_sel = Selector::parse("nav").unwrap();
+    el.select(&nav_sel).next().is_some()
+}
+
+/// Prefer `<main>` over `<body>` when the page declares one — modern
+/// templates put real content inside `<main>` and chrome outside it, so
+/// rooting the walker there gives a cleaner extraction.
+fn pick_content_root(doc: &Html) -> scraper::ElementRef<'_> {
+    let main_sel = Selector::parse("main").unwrap();
+    if let Some(m) = doc.select(&main_sel).next() {
+        return m;
+    }
+    let body_sel = Selector::parse("body").unwrap();
+    doc.select(&body_sel).next().unwrap_or(doc.root_element())
+}
+
 fn skip_element(name: &str) -> bool {
     matches!(
         name,
-        "script" | "style" | "noscript" | "template" | "svg" | "iframe" | "object" | "embed"
+        "script"
+            | "style"
+            | "noscript"
+            | "template"
+            | "svg"
+            | "iframe"
+            | "object"
+            | "embed"
+            // Page chrome — always skipped.
+            | "nav"
+            | "footer"
+            | "aside"
+            // <header> is intentionally absent here. Many article templates
+            // wrap the hero (with its real H1) in <header>; skipping it
+            // unconditionally would drop the page's primary heading.
+            // We handle <header> via is_chrome_header below, which only
+            // skips banner-style headers (those containing a <nav>).
     )
 }
 

@@ -52,9 +52,16 @@ static ORG_LEGAL: Lazy<Regex> = Lazy::new(|| {
 const HONORIFIC_PREFIXES: &[&str] =
     &["Per", "By", "With", "From", "As", "Like", "And", "The", "Dr", "Prof", "Mr", "Mrs", "Ms"];
 
-pub fn extract(body_text: &str) -> Entities {
+pub fn extract(body_text: &str, headings: &[String]) -> Entities {
     let mut people: Vec<Person> = Vec::new();
     let mut seen_names: BTreeSet<String> = BTreeSet::new();
+    // Lowercase set of heading texts so we can suppress entity matches
+    // that are *exactly* a section title — those are structural
+    // navigation, not first-class entities.
+    let heading_set: std::collections::HashSet<String> = headings
+        .iter()
+        .map(|h| h.trim().to_ascii_lowercase())
+        .collect();
 
     for cap in NAME_WITH_CRED.captures_iter(body_text) {
         let name = strip_honorific(&cap[1]);
@@ -86,9 +93,27 @@ pub fn extract(body_text: &str) -> Entities {
     // Organisations: only the high-confidence legal-suffix matches. Bare
     // acronyms (LDL, MRI, FDA) produce more false positives than signal
     // for SEO content, so we leave them to the keyword pass.
-    let mut orgs: BTreeSet<String> = BTreeSet::new();
+    //
+    // Two suppression rules:
+    //   1. Exact heading-text match → structural section title
+    //      ("Senolytic Research", "Cancer Research").
+    //   2. Single mention only → likely nav-link concatenation
+    //      ("Our Approach Explore Research"). Real orgs are referenced
+    //      multiple times.
+    let mut org_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for cap in ORG_LEGAL.captures_iter(body_text) {
-        orgs.insert(format!("{} {}", &cap[1], &cap[2]));
+        let name = format!("{} {}", &cap[1], &cap[2]);
+        if heading_set.contains(name.to_ascii_lowercase().trim()) {
+            continue;
+        }
+        *org_counts.entry(name).or_insert(0) += 1;
+    }
+    let mut orgs: BTreeSet<String> = BTreeSet::new();
+    for (name, count) in org_counts {
+        if count >= 2 {
+            orgs.insert(name);
+        }
     }
 
     let mut organizations: Vec<String> = orgs.into_iter().collect();

@@ -1,7 +1,11 @@
-//! Position-bias analysis. Indig's Feb 2026 study (growth-memo.com, n=18,012
-//! ChatGPT citations) found 44.2% of citations come from the first 30% of
-//! body text. Flag when high-leverage signals — TL;DR, first statistic,
-//! first credential mention — sit below that mark.
+//! Position-bias analysis. Kevin Indig's Feb 2026 Growth Memo write-up
+//! (growth-memo.com) on ChatGPT citation distribution argues citations
+//! concentrate in the first third of the body. The exact percentages
+//! reported in secondary summaries (~44% in the first 30%) have not been
+//! cross-checked against the primary dataset; treat the 30% boundary as
+//! engineering judgement, not a hard number. Flag when high-leverage
+//! signals — TL;DR, first statistic, first credential mention — sit
+//! below that mark.
 
 use once_cell::sync::Lazy;
 use regex::Regex;

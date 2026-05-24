@@ -96,6 +96,12 @@ pub fn run(
         .build();
 
     let response = agent.get(&url).call().map_err(|e| match e {
+        // 4xx is client error — retry won't help. 5xx and network errors
+        // are transient. The old behaviour mapped both to Transient,
+        // which made CI retry loops chase 404s forever.
+        ureq::Error::Status(code, _) if (400..500).contains(&code) => {
+            AppError::InvalidInput(format!("HTTP {code} fetching {url}"))
+        }
         ureq::Error::Status(code, _) => AppError::Transient(format!(
             "HTTP {code} fetching {url}"
         )),

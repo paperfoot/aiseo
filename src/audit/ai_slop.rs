@@ -54,9 +54,13 @@ static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
         re: Regex::new(p).unwrap_or_else(|e| panic!("bad regex for {kind}: {e}")),
     };
     vec![
+        // "not X but Y" rhetorical pivot — common in legitimate prose
+        // (Scott Alexander, Brian Potter, every essay tradition). Demoted
+        // to low confidence per v0.6 stress test so it stops dominating
+        // the slop score on essayistic writing.
         mk(
             "negation_pivot_but",
-            "high",
+            "low",
             r"(?i)\b(not|don'?t|doesn'?t|isn'?t|aren'?t|never)\b[^.!?\n]{3,80},?\s+but\b",
         ),
         mk(
@@ -68,10 +72,14 @@ static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
         // medium per Codex review — all three appear in legitimate
         // business / academic writing.
         mk("delve_only", "high", r"(?i)\bdelv(e|es|ed|ing)\b"),
+        // Drop bare "foster" because it matches the surname (Foster
+        // Wallace, Jodie Foster, surnamed authors generally). Keep the
+        // verb forms "fosters / fostered / fostering" which are AI-slop
+        // tells; the bare lemma "foster" is too noisy.
         mk(
             "leverage_foster_underscore",
             "medium",
-            r"(?i)\b(leverag(e|es|ed|ing)|foster(s|ed|ing)?|underscor(e|es|ed|ing))\b",
+            r"(?i)\b(leverag(e|es|ed|ing)|foster(s|ed|ing)|underscor(e|es|ed|ing))\b",
         ),
         // Tapestry / paradigm / multifaceted stay high (rare in real prose).
         // "nuanced" and "interplay" demoted — common in academic writing.

@@ -64,7 +64,33 @@ pub fn build(
         out.push("og:image absent. 1200×630.".into());
     }
     if meta.canonical.is_none() {
-        out.push("Canonical link absent. AI retrieval dedupes via canonical.".into());
+        out.push(
+            "Canonical link absent. Without it, near-duplicate URLs dilute Google's index and confuse downstream retrieval.".into(),
+        );
+    }
+
+    // Robots meta — noindex/nofollow are the actual findings, not absence.
+    if let Some(r) = meta.robots.as_deref() {
+        let lower = r.to_ascii_lowercase();
+        if lower.contains("noindex") {
+            out.push(format!(
+                "Robots meta is `{}`. Page is excluded from search and AI retrieval.",
+                r
+            ));
+        } else if lower.contains("nofollow") {
+            out.push(format!(
+                "Robots meta is `{}`. Links on this page pass no authority.",
+                r
+            ));
+        }
+    }
+
+    // Viewport — absence breaks mobile rendering and hurts mobile-first
+    // indexing.
+    if meta.viewport.is_none() {
+        out.push(
+            "Viewport meta absent. Mobile rendering breaks; Google indexes mobile-first.".into(),
+        );
     }
 
     // ── Content structure ────────────────────────────────────────────────────
@@ -78,18 +104,18 @@ pub fn build(
     }
     if content.h2.len() < 2 {
         out.push(format!(
-            "{} H2s. Use H2 to break the page into self-contained passages of ~120-180 words for passage-level retrieval (Perplexity / AI Mode fan-out).",
+            "{} H2s in main content. H2s act as passage anchors for AI retrieval; one or zero H2s makes the page hard to chunk.",
             content.h2.len()
         ));
     }
-    if content.word_count >= 200 && content.word_count < 300 {
+    // Word-count thresholds. Google's May-2026 AI optimisation guide
+    // (developers.google.com/search/docs/fundamentals/ai-optimization-guide)
+    // explicitly says there's no ideal length and no required chunk size.
+    // Only flag pages that are *too thin* to satisfy a question, not pages
+    // that are "wrong length" by some made-up rule.
+    if content.word_count < 300 {
         out.push(format!(
-            "Body is {} words. ChatGPT comprehensive answers favour 1500-3000; Perplexity passages reward 120-180 word sections.",
-            content.word_count
-        ));
-    } else if content.word_count >= 300 && content.word_count < 800 {
-        out.push(format!(
-            "Body is {} words. ChatGPT comprehensive answers favour 1500-3000; Perplexity passages reward 120-180 word sections.",
+            "Body is {} words. Thin pages rarely satisfy substantive queries.",
             content.word_count
         ));
     }
@@ -98,7 +124,11 @@ pub fn build(
         out.push("No TL;DR. 40..60 words in the first 10%.".into());
     }
     if !content.has_credentials && content.has_author && is_english(content) {
-        out.push("Author has no credentials. MD, PhD, MSc lift ChatGPT and Claude citation.".into());
+        // Recast (Codex 2026-05-24): the "lifts ChatGPT/Claude citation"
+        // formulation was stronger than any current public source supports.
+        // Credentials matter for entity disambiguation and reviewer trust,
+        // which is downstream of ranking, not a direct lift.
+        out.push("Author byline present but no visible credentials. Credentials help entity disambiguation and reviewer trust on YMYL pages.".into());
     }
     if content.missing_alt_count > 0 {
         out.push(format!(
@@ -123,11 +153,14 @@ pub fn build(
                 .into(),
         );
     }
-    // Schema density — Ahrefs Apr-2026: 6+ distinct types correlates with
-    // negative AI Mode citation lift. Stop stuffing.
-    if schema_types.len() > 6 {
+    // Schema density. The negative-lift-past-6 claim previously cited
+    // here lacked a verifiable primary source — Ahrefs Apr-2026 reported
+    // schema correlated with +2.4% AI Mode citation (noise), but never
+    // published a past-6 cliff. Reframed as a maintenance-burden note,
+    // not a ranking penalty.
+    if schema_types.len() > 8 {
         out.push(format!(
-            "{} JSON-LD @types on one page. Ahrefs Apr-2026: schema density past 6 correlates with negative AI Mode lift.",
+            "{} JSON-LD @types on one page. Past ~8 distinct types the maintenance burden outweighs the ranking signal — collapse overlapping types (Product+Offer+Service, etc.).",
             schema_types.len()
         ));
     }
@@ -140,9 +173,41 @@ pub fn build(
         );
     }
     // Heading-order violations: H3 before any H2, H2 before any H1,
-    // levels skipped (h1 -> h3 directly).
+    // levels skipped (h1 -> h3 directly). Chrome headings (nav/footer)
+    // are filtered upstream so footer columns no longer trigger this.
     if let Some(v) = heading_hierarchy_violation(&content.headings_in_order) {
         out.push(v);
+    }
+    if content.duplicate_heading_count > 0 {
+        out.push(format!(
+            "{} duplicate heading{}. Headings are passage anchors for AI retrieval; identical text confuses fan-out.",
+            content.duplicate_heading_count,
+            if content.duplicate_heading_count == 1 { "" } else { "s" },
+        ));
+    }
+    if content.empty_heading_count > 0 {
+        out.push(format!(
+            "{} empty heading tag{}. Delete or fill — empty headings break outline navigation.",
+            content.empty_heading_count,
+            if content.empty_heading_count == 1 { "" } else { "s" },
+        ));
+    }
+    // Comparison tables — Perplexity Pages and AI Mode lift content
+    // with structured tables. Only flag for medium-or-longer pages.
+    if content.table_count == 0 && content.word_count >= 800 {
+        out.push(
+            "No `<table>` elements. Perplexity and AI Mode lift pages with comparison tables on listy content.".into(),
+        );
+    }
+    // Direct-quotable sentences (5..25 words, complete-sentence shape) —
+    // proxy for what assistants cite verbatim. Cold pages with <5 are
+    // hard to quote.
+    if content.word_count >= 400 && content.quotable_sentence_count < 5 {
+        out.push(format!(
+            "Only {} quotable sentence{} (5..25 words). AI assistants cite short complete sentences verbatim — add a few standalone claims.",
+            content.quotable_sentence_count,
+            if content.quotable_sentence_count == 1 { "" } else { "s" },
+        ));
     }
     // Hreflang is only flagged if the page declares a non-default lang
     // but advertises no alternates — we don't badger English-only pages.
@@ -157,12 +222,14 @@ pub fn build(
 
     // ── Freshness ────────────────────────────────────────────────────────────
     if fresh.date_modified.is_none() && is_article(schema_types) {
-        out.push("dateModified absent. Perplexity weights freshness.".into());
+        out.push(
+            "dateModified absent on Article schema. Freshness signals matter on news, evolving topics, and any page where the user reasonably asks \"is this current?\"".into(),
+        );
     } else if let Some(days) = fresh.days_since_modified
         && days > 90
     {
         out.push(format!(
-            "Last modified {} days ago. Refresh for Perplexity and AI Mode visibility.",
+            "Last modified {} days ago. If the topic moves, refresh and update dateModified.",
             days
         ));
     }

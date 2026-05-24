@@ -75,8 +75,18 @@ static YOY_DELTA: Lazy<Regex> = Lazy::new(|| {
 });
 
 static FIRST_PERSON_EVIDENCE: Lazy<Regex> = Lazy::new(|| {
+    // First-person evidence patterns. Two tiers:
+    //   - hard evidence verbs: analysed, measured, tested, surveyed,
+    //     ran, conducted, sampled, interviewed, observed, sequenced,
+    //     benchmarked, profiled, simulated, modelled, replicated
+    //   - first-party action verbs: built, train(ed), develop(ed),
+    //     designed, engineered, prototyped, deployed, ship(ped), launched,
+    //     redirect, repair, treat — the voicey "we build / we redirect /
+    //     we treat" pattern that founder pages and product sites use.
+    //   - our-N: dataset, study, analysis, sample, cohort, lab,
+    //     experiment, results, findings, team-found/measured/observed.
     Regex::new(
-        r"(?i)\b(we\s+(analy[sz]ed|measured|tracked|tested|surveyed|ran|conducted|built|trained|sampled|interviewed)|our\s+(dataset|study|analysis|sample|cohort|team\s+(found|measured|observed)))\b",
+        r"(?i)\b(we\s+(analy[sz]ed|measured|tracked|tested|surveyed|ran|conducted|sampled|interviewed|observed|sequenced|benchmarked|profiled|simulated|modell?ed|replicated|built|build|trained?|train|develop(ed)?|designed|engineered|prototyped|deployed|ship(ped)?|launched|redirect|repair|treat)|our\s+(dataset|study|analysis|sample|cohort|lab|experiment|results|findings|patients|approach|team\s+(found|measured|observed|built|developed)))\b",
     )
     .unwrap()
 });

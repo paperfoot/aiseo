@@ -11,6 +11,15 @@ pub struct Meta {
     pub keywords: Option<String>,
     pub author: Option<String>,
     pub canonical: Option<String>,
+    /// `<meta name="robots">` content. Absence is fine (defaults to
+    /// index,follow); presence with `noindex` or `nofollow` is the finding.
+    pub robots: Option<String>,
+    /// `<meta name="viewport">` content. Absence on a mobile-targeted page
+    /// is an SEO/UX finding.
+    pub viewport: Option<String>,
+    /// True when any `<link rel>` value contains `icon` (`icon`,
+    /// `shortcut icon`, `apple-touch-icon`). Branding signal.
+    pub favicon: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -48,6 +57,8 @@ pub fn extract(doc: &Html) -> Meta {
             (Some("description"), Some(v)) => m.description = Some(v),
             (Some("keywords"), Some(v)) => m.keywords = Some(v),
             (Some("author"), Some(v)) => m.author = Some(v),
+            (Some("robots"), Some(v)) => m.robots = Some(v),
+            (Some("viewport"), Some(v)) => m.viewport = Some(v),
             _ => {}
         }
     }
@@ -57,6 +68,13 @@ pub fn extract(doc: &Html) -> Meta {
         .select(&link_sel)
         .next()
         .and_then(|el| el.value().attr("href").map(str::to_string));
+
+    // Favicon: any <link rel> that mentions "icon" counts (covers
+    // "icon", "shortcut icon", "apple-touch-icon", "mask-icon").
+    let any_link_sel = Selector::parse("link[rel]").unwrap();
+    m.favicon = doc
+        .select(&any_link_sel)
+        .any(|el| el.value().attr("rel").is_some_and(|r| r.to_ascii_lowercase().contains("icon")));
 
     m
 }

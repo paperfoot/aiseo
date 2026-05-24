@@ -147,7 +147,15 @@ pub fn audit_content(
     let position_bias = position::analyze(&content.body_text);
     let freshness = freshness::analyze(&html_like, &schema_types);
     let keywords = keywords::extract(&content.body_text);
-    let entities = entities::extract(&content.body_text);
+    // Pass heading text into entities so the extractor can suppress
+    // matches that are *just* a section title — e.g. an H3 like
+    // "Senolytic Research" matching the legal-suffix `Research` rule.
+    let heading_pool: Vec<String> = content
+        .headings_in_order
+        .iter()
+        .map(|h| h.text.clone())
+        .collect();
+    let entities = entities::extract(&content.body_text, &heading_pool);
     let evidence = evidence::extract(&content.body_text);
     let voice = voice::extract(&content.body_text, &schema_types, &html_like);
     let ai_slop = ai_slop::extract(&content.body_text);
