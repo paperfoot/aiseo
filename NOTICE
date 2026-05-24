@@ -1,0 +1,26 @@
+aiseo
+Copyright 2026 Boris Djordjevic / paperfoot
+
+This product includes regex patterns and the rule taxonomy adapted from
+the Impeccable project by Paul Bakaus:
+
+    https://github.com/pbakaus/impeccable
+    Apache License 2.0
+    Copyright Paul Bakaus
+
+Specifically, `src/audit/design_slop.rs` ports the deterministic regex
+matchers from `cli/engine/engines/regex/detect-text.mjs` and the constants
+from `cli/engine/shared/constants.mjs`. The rule IDs (`side-tab`,
+`overused-font`, `gradient-text`, `bounce-easing`, `layout-transition`,
+`pure-black-white`, `gray-on-color`, `ai-color-palette`, `monotonous-spacing`,
+`everything-centered`, `single-font`, `border-accent-on-rounded`,
+`justified-text`, `tiny-text`, `tight-leading`, `all-caps-body`,
+`wide-tracking`) mirror Impeccable's taxonomy to preserve cross-tool
+comparability of audit results.
+
+Additions beyond Impeccable (`claude_fraunces_wave`, `shadcn_default_oklch`,
+`vercel_next_forge_default`) are original to aiseo.
+
+The Metatext detector (`src/audit/metatext.rs`) draws on the public
+catalogue of AI-writing tells maintained by the tbhb/vale-ai-tells
+project (MIT, https://github.com/tbhb/vale-ai-tells).

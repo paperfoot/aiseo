@@ -37,6 +37,9 @@ struct FetchEnvelope {
     freshness: audit::Freshness,
     ai_slop: audit::AiSlop,
     information_gain: audit::InformationGain,
+    metatext: audit::Metatext,
+    copy_precision: audit::CopyPrecision,
+    design_slop: audit::DesignSlop,
     suggestions: Vec<String>,
 }
 
@@ -180,6 +183,9 @@ pub fn run(
         freshness: report.freshness,
         ai_slop: report.ai_slop,
         information_gain: report.information_gain,
+        metatext: report.metatext,
+        copy_precision: report.copy_precision,
+        design_slop: report.design_slop,
         suggestions: report.suggestions,
     };
 

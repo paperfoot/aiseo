@@ -59,6 +59,9 @@ pub fn run() {
                     "freshness": "{ date_modified, date_published, days_since_modified, year_mentions[], current_year }",
                     "ai_slop": "{ signals: [{ kind, confidence, snippet, position_pct }], density_per_1000_words, verdict: 'clean' | 'suspicious' | 'likely_ai' }",
                     "information_gain": "{ score: 0..10, counts: { named_quotes, sample_sizes, yoy_deltas, first_person_evidence, method_disclosure, numbered_citations }, samples[] }",
+                    "metatext": "{ signals: [{ kind, confidence, snippet, position_pct }], heading_skeleton: { jaccard, matched[] }, weighted_score_per_1000_words, verdict: 'clean' | 'suspicious' | 'metatext_heavy' }",
+                    "copy_precision": "{ score: 0..10, counts, densities, verdict: 'tight' | 'mid' | 'padded' }",
+                    "design_slop": "{ findings: [{ id, snippet }], counts: { rule_id: count }, verdict: 'clean' | 'minor' | 'suspicious' | 'heavy' }",
                     "suggestions": "[string, ...]"
                 }
             },

@@ -9,6 +9,8 @@ use std::path::Path;
 
 mod ai_slop;
 mod content;
+mod copy_precision;
+mod design_slop;
 mod entities;
 mod evidence;
 pub mod factors;
@@ -16,6 +18,7 @@ mod freshness;
 mod info_gain;
 mod keywords;
 mod meta;
+mod metatext;
 mod position;
 pub mod report;
 mod suggest;
@@ -23,12 +26,15 @@ mod voice;
 
 pub use ai_slop::AiSlop;
 pub use content::{ContentStructure, HeadingOrderEntry, NoscriptKind};
+pub use copy_precision::CopyPrecision;
+pub use design_slop::DesignSlop;
 pub use entities::Entities;
 pub use evidence::Evidence;
 pub use freshness::Freshness;
 pub use info_gain::InformationGain;
 pub use keywords::Keywords;
 pub use meta::{Meta, OpenGraph, TwitterCard};
+pub use metatext::Metatext;
 pub use position::PositionBias;
 pub use suggest::ScoreBreakdown;
 pub use voice::Voice;
@@ -50,6 +56,9 @@ pub struct AuditReport {
     pub freshness: Freshness,
     pub ai_slop: AiSlop,
     pub information_gain: InformationGain,
+    pub metatext: Metatext,
+    pub copy_precision: CopyPrecision,
+    pub design_slop: DesignSlop,
     pub score: u32,
     pub score_breakdown: ScoreBreakdown,
     pub suggestions: Vec<String>,
@@ -143,6 +152,18 @@ pub fn audit_content(
     let voice = voice::extract(&content.body_text, &schema_types, &html_like);
     let ai_slop = ai_slop::extract(&content.body_text);
     let information_gain = info_gain::extract(&content.body_text);
+    // metatext reads body text + heading order so it can compute the
+    // canonical-AI-skeleton Jaccard alongside the lexical patterns.
+    let heading_strings: Vec<String> = content
+        .headings_in_order
+        .iter()
+        .map(|h| h.text.clone())
+        .collect();
+    let metatext = metatext::extract(&content.body_text, &heading_strings);
+    let copy_precision = copy_precision::extract(&content.body_text);
+    // design_slop reads the *raw HTML* (not the body text) so it sees CSS,
+    // class strings, and inline styles.
+    let design_slop = design_slop::extract(&html_like);
 
     let mut suggestions = suggest::build(
         &meta,
@@ -156,6 +177,15 @@ pub fn audit_content(
         suggestions.push(s);
     }
     if let Some(s) = info_gain::suggestion(&information_gain, content.word_count) {
+        suggestions.push(s);
+    }
+    if let Some(s) = metatext::suggestion(&metatext) {
+        suggestions.push(s);
+    }
+    if let Some(s) = copy_precision::suggestion(&copy_precision) {
+        suggestions.push(s);
+    }
+    if let Some(s) = design_slop::suggestion(&design_slop) {
         suggestions.push(s);
     }
     let score_breakdown = suggest::score_breakdown(
@@ -186,6 +216,9 @@ pub fn audit_content(
         freshness,
         ai_slop,
         information_gain,
+        metatext,
+        copy_precision,
+        design_slop,
         score,
         score_breakdown,
         suggestions,
