@@ -1,8 +1,9 @@
 use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::audit::{self, AuditError};
+use crate::audit::factors as audit_factors;
 use crate::audit::report::{self, ReportFormat, ReportInput};
+use crate::audit::{self, AuditError};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -43,8 +44,14 @@ pub fn run(
     path: PathBuf,
     fail_under: Option<u32>,
     out: Option<PathBuf>,
+    factors: Option<String>,
 ) -> Result<(), AppError> {
-    let report = audit::audit_file(&path).map_err(|e| match e {
+    let factor_list = match factors.as_deref() {
+        Some(s) => audit_factors::parse_list(s).map_err(AppError::InvalidInput)?,
+        None => Vec::new(),
+    };
+
+    let mut report = audit::audit_file(&path).map_err(|e| match e {
         AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
         AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
             "unsupported file type: .{t} (expected .html, .htm, .md, .mdx)"
@@ -53,6 +60,15 @@ pub fn run(
     })?;
 
     let score = report.score;
+
+    if !factor_list.is_empty() {
+        report.suggestions =
+            audit_factors::filter_suggestions(std::mem::take(&mut report.suggestions), &factor_list);
+        report.score_breakdown.components = audit_factors::filter_components(
+            std::mem::take(&mut report.score_breakdown.components),
+            &factor_list,
+        );
+    }
 
     let envelope = AuditEnvelope {
         file: report.file,

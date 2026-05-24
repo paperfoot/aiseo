@@ -42,6 +42,10 @@ pub enum Commands {
         /// Scanning annotations.
         #[arg(long, value_name = "PATH")]
         out: Option<PathBuf>,
+        /// Comma-separated list of factors to keep in the output:
+        /// meta, og, content, schema, freshness, position. Omit to keep all.
+        #[arg(long, value_name = "LIST")]
+        factors: Option<String>,
     },
     /// Fetch a live URL and audit the response body. Same envelope as
     /// `audit` plus a `fetched: { url, status, content_type, bytes }` block.
@@ -56,6 +60,9 @@ pub enum Commands {
         /// (.json, .md, .sarif).
         #[arg(long, value_name = "PATH")]
         out: Option<PathBuf>,
+        /// Comma-separated list of factors to keep in the output.
+        #[arg(long, value_name = "LIST")]
+        factors: Option<String>,
     },
     /// Generate a JSON-LD block for a given schema.org type. Output is
     /// ready to paste into a `<script type="application/ld+json">` block.

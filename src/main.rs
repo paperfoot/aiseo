@@ -48,11 +48,11 @@ fn main() {
     let ctx = Ctx::new(cli.json, cli.quiet);
 
     let result = match cli.command {
-        Commands::Audit { file, fail_under, out } => {
-            commands::audit::run(ctx, file, fail_under, out)
+        Commands::Audit { file, fail_under, out, factors } => {
+            commands::audit::run(ctx, file, fail_under, out, factors)
         }
-        Commands::Fetch { url, fail_under, out } => {
-            commands::fetch::run(ctx, url, fail_under, out)
+        Commands::Fetch { url, fail_under, out, factors } => {
+            commands::fetch::run(ctx, url, fail_under, out, factors)
         }
         Commands::Schema { kind } => commands::schema::run(ctx, kind),
         Commands::AgentInfo => {

@@ -10,6 +10,7 @@ use std::path::Path;
 mod content;
 mod entities;
 mod evidence;
+pub mod factors;
 mod freshness;
 mod keywords;
 mod meta;

@@ -9,8 +9,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::audit::{self, AuditError};
+use crate::audit::factors as audit_factors;
 use crate::audit::report::{self, ReportFormat, ReportInput};
+use crate::audit::{self, AuditError};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -63,7 +64,13 @@ pub fn run(
     url: String,
     fail_under: Option<u32>,
     out: Option<PathBuf>,
+    factors: Option<String>,
 ) -> Result<(), AppError> {
+    let factor_list = match factors.as_deref() {
+        Some(s) => audit_factors::parse_list(s).map_err(AppError::InvalidInput)?,
+        None => Vec::new(),
+    };
+
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(AppError::InvalidInput(format!(
             "URL must start with http:// or https://, got `{url}`"
@@ -104,7 +111,7 @@ pub fn run(
     tmp.as_file_mut().write_all(body.as_bytes())?;
     let path = tmp.path().to_path_buf();
 
-    let report = audit::audit_file(&path).map_err(|e| match e {
+    let mut report = audit::audit_file(&path).map_err(|e| match e {
         AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
         AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
             "unsupported file type: .{t}"
@@ -113,6 +120,15 @@ pub fn run(
     })?;
 
     let score = report.score;
+
+    if !factor_list.is_empty() {
+        report.suggestions =
+            audit_factors::filter_suggestions(std::mem::take(&mut report.suggestions), &factor_list);
+        report.score_breakdown.components = audit_factors::filter_components(
+            std::mem::take(&mut report.score_breakdown.components),
+            &factor_list,
+        );
+    }
     let envelope = FetchEnvelope {
         fetched: FetchInfo {
             url: url.clone(),

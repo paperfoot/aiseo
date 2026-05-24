@@ -33,6 +33,12 @@ pub fn run() {
                         "type": "path",
                         "required": false,
                         "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif (GitHub Code Scanning)."
+                    },
+                    {
+                        "name": "--factors",
+                        "type": "string",
+                        "required": false,
+                        "description": "Comma-separated factor allow-list. Drops suggestions and score_breakdown components from other categories. Valid: meta, og, content, schema, freshness, position."
                     }
                 ],
                 "output_shape": {
@@ -77,6 +83,12 @@ pub fn run() {
                         "type": "path",
                         "required": false,
                         "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif."
+                    },
+                    {
+                        "name": "--factors",
+                        "type": "string",
+                        "required": false,
+                        "description": "Comma-separated factor allow-list. Same vocabulary as audit."
                     }
                 ],
                 "output_shape": {
