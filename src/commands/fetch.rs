@@ -6,9 +6,11 @@
 
 use serde::Serialize;
 use std::io::Write;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::audit::{self, AuditError};
+use crate::audit::report::{self, ReportFormat, ReportInput};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -56,7 +58,12 @@ struct ContentSummary {
     has_credentials: bool,
 }
 
-pub fn run(ctx: Ctx, url: String, fail_under: Option<u32>) -> Result<(), AppError> {
+pub fn run(
+    ctx: Ctx,
+    url: String,
+    fail_under: Option<u32>,
+    out: Option<PathBuf>,
+) -> Result<(), AppError> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(AppError::InvalidInput(format!(
             "URL must start with http:// or https://, got `{url}`"
@@ -141,24 +148,54 @@ pub fn run(ctx: Ctx, url: String, fail_under: Option<u32>) -> Result<(), AppErro
         suggestions: report.suggestions,
     };
 
-    output::print_success_or(ctx, &envelope, |e| {
-        use owo_colors::OwoColorize;
-        println!("{} {}", "Fetch".bold(), e.fetched.url.dimmed());
-        println!(
-            "  HTTP {}   {} bytes   score: {}/100",
-            e.fetched.status,
-            e.fetched.bytes,
-            score_colour(e.score)
+    if let Some(out_path) = out.as_ref() {
+        let format = ReportFormat::from_extension(out_path)?;
+        report::write(
+            format,
+            out_path,
+            &ReportInput {
+                envelope: &envelope,
+                file_label: &envelope.fetched.url,
+                score,
+                suggestions: &envelope.suggestions,
+            },
+        )?;
+        output::print_success_or(
+            ctx,
+            &serde_json::json!({
+                "wrote": out_path.display().to_string(),
+                "score": score,
+            }),
+            |_d| {
+                use owo_colors::OwoColorize;
+                println!(
+                    "{} {} ({}/100)",
+                    "Wrote".green(),
+                    out_path.display(),
+                    score
+                );
+            },
         );
-        if e.suggestions.is_empty() {
-            println!("\n  {}", "No suggestions — ship it.".green());
-        } else {
-            println!("\n  Suggestions:");
-            for s in &e.suggestions {
-                println!("   • {s}");
+    } else {
+        output::print_success_or(ctx, &envelope, |e| {
+            use owo_colors::OwoColorize;
+            println!("{} {}", "Fetch".bold(), e.fetched.url.dimmed());
+            println!(
+                "  HTTP {}   {} bytes   score: {}/100",
+                e.fetched.status,
+                e.fetched.bytes,
+                score_colour(e.score)
+            );
+            if e.suggestions.is_empty() {
+                println!("\n  {}", "No suggestions — ship it.".green());
+            } else {
+                println!("\n  Suggestions:");
+                for s in &e.suggestions {
+                    println!("   • {s}");
+                }
             }
-        }
-    });
+        });
+    }
 
     if let Some(threshold) = fail_under
         && score < threshold

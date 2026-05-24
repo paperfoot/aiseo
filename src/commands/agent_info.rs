@@ -27,6 +27,12 @@ pub fn run() {
                         "type": "int",
                         "required": false,
                         "description": "Exit 1 if the audit score is below this threshold. Useful in CI."
+                    },
+                    {
+                        "name": "--out",
+                        "type": "path",
+                        "required": false,
+                        "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif (GitHub Code Scanning)."
                     }
                 ],
                 "output_shape": {
@@ -65,6 +71,12 @@ pub fn run() {
                         "type": "int",
                         "required": false,
                         "description": "Exit 1 if score below threshold"
+                    },
+                    {
+                        "name": "--out",
+                        "type": "path",
+                        "required": false,
+                        "description": "Write report to file. Format auto-detected from extension: .json, .md, .sarif."
                     }
                 ],
                 "output_shape": {

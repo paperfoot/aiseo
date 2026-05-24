@@ -14,6 +14,7 @@ mod freshness;
 mod keywords;
 mod meta;
 mod position;
+pub mod report;
 mod suggest;
 mod voice;
 

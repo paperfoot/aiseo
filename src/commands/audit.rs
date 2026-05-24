@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 use crate::audit::{self, AuditError};
+use crate::audit::report::{self, ReportFormat, ReportInput};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -37,7 +38,12 @@ struct ContentSummary {
     has_credentials: bool,
 }
 
-pub fn run(ctx: Ctx, path: PathBuf, fail_under: Option<u32>) -> Result<(), AppError> {
+pub fn run(
+    ctx: Ctx,
+    path: PathBuf,
+    fail_under: Option<u32>,
+    out: Option<PathBuf>,
+) -> Result<(), AppError> {
     let report = audit::audit_file(&path).map_err(|e| match e {
         AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
         AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
@@ -76,31 +82,63 @@ pub fn run(ctx: Ctx, path: PathBuf, fail_under: Option<u32>) -> Result<(), AppEr
         suggestions: report.suggestions,
     };
 
-    output::print_success_or(ctx, &envelope, |e| {
-        use owo_colors::OwoColorize;
-        println!("{} {}", "Audit".bold(), e.file.dimmed());
-        println!(
-            "  score: {}/100   words: {}   schemas: {}",
-            score_colour(e.score),
-            e.content.word_count,
-            if e.schema_types.is_empty() {
-                "none".red().to_string()
-            } else {
-                e.schema_types.join(", ").green().to_string()
-            }
+    if let Some(out_path) = out.as_ref() {
+        let format = ReportFormat::from_extension(out_path)?;
+        report::write(
+            format,
+            out_path,
+            &ReportInput {
+                envelope: &envelope,
+                file_label: &envelope.file,
+                score,
+                suggestions: &envelope.suggestions,
+            },
+        )?;
+        // With --out, stdout stays terse: one JSON or one line, never the
+        // full envelope (the file is the deliverable).
+        output::print_success_or(
+            ctx,
+            &serde_json::json!({
+                "wrote": out_path.display().to_string(),
+                "score": score,
+            }),
+            |_d| {
+                use owo_colors::OwoColorize;
+                println!(
+                    "{} {} ({}/100)",
+                    "Wrote".green(),
+                    out_path.display(),
+                    score
+                );
+            },
         );
-        if e.suggestions.is_empty() {
-            println!("\n  {}", "No suggestions — ship it.".green());
-        } else {
-            println!("\n  Suggestions:");
-            for s in &e.suggestions {
-                println!("   • {s}");
+    } else {
+        output::print_success_or(ctx, &envelope, |e| {
+            use owo_colors::OwoColorize;
+            println!("{} {}", "Audit".bold(), e.file.dimmed());
+            println!(
+                "  score: {}/100   words: {}   schemas: {}",
+                score_colour(e.score),
+                e.content.word_count,
+                if e.schema_types.is_empty() {
+                    "none".red().to_string()
+                } else {
+                    e.schema_types.join(", ").green().to_string()
+                }
+            );
+            if e.suggestions.is_empty() {
+                println!("\n  {}", "No suggestions — ship it.".green());
+            } else {
+                println!("\n  Suggestions:");
+                for s in &e.suggestions {
+                    println!("   • {s}");
+                }
             }
-        }
-    });
+        });
+    }
 
-    // Quality gate. The audit JSON is already on stdout; this only flips
-    // the exit code so CI / agents can branch on pass / fail.
+    // Quality gate. The audit JSON / file is already produced; this only
+    // flips the exit code so CI / agents can branch on pass / fail.
     if let Some(threshold) = fail_under
         && score < threshold
     {

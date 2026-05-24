@@ -37,6 +37,11 @@ pub enum Commands {
         /// Exit 1 if the audit score is below this threshold. Useful in CI.
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
+        /// Write the report to a file. Format is auto-detected from the
+        /// extension: .json, .md, .sarif. SARIF lights up GitHub Code
+        /// Scanning annotations.
+        #[arg(long, value_name = "PATH")]
+        out: Option<PathBuf>,
     },
     /// Fetch a live URL and audit the response body. Same envelope as
     /// `audit` plus a `fetched: { url, status, content_type, bytes }` block.
@@ -47,6 +52,10 @@ pub enum Commands {
         /// Exit 1 if the audit score is below this threshold.
         #[arg(long, value_name = "SCORE")]
         fail_under: Option<u32>,
+        /// Write the report to a file. Auto-detects format from extension
+        /// (.json, .md, .sarif).
+        #[arg(long, value_name = "PATH")]
+        out: Option<PathBuf>,
     },
     /// Generate a JSON-LD block for a given schema.org type. Output is
     /// ready to paste into a `<script type="application/ld+json">` block.
@@ -113,8 +122,9 @@ EXAMPLES:
   aiseo audit ~/site/about.html
   aiseo audit ~/site/post.md | jq '{score, suggestions}'
   aiseo audit page.html --fail-under 80          # CI gate
-  aiseo audit page.html | jq '.score_breakdown'  # see deductions
-  aiseo audit page.html --quiet --json > audit.json";
+  aiseo audit page.html --out audit.sarif        # GitHub Code Scanning
+  aiseo audit page.html --out audit.md           # committable report
+  aiseo audit page.html | jq '.score_breakdown'  # see deductions";
 
 #[derive(Subcommand)]
 pub enum SkillAction {
