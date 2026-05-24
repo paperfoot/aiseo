@@ -1,0 +1,101 @@
+use serde::Serialize;
+use std::path::PathBuf;
+
+use crate::audit::{self, AuditError};
+use crate::error::AppError;
+use crate::output::{self, Ctx};
+
+#[derive(Serialize)]
+struct AuditEnvelope {
+    file: String,
+    file_type: &'static str,
+    score: u32,
+    meta: audit::Meta,
+    open_graph: audit::OpenGraph,
+    twitter_card: audit::TwitterCard,
+    schema_types: Vec<String>,
+    content: ContentSummary,
+    position_bias: audit::PositionBias,
+    freshness: audit::Freshness,
+    suggestions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct ContentSummary {
+    word_count: usize,
+    h1: Vec<String>,
+    h2: Vec<String>,
+    h3: Vec<String>,
+    has_tldr: bool,
+    has_faq: bool,
+    has_author: bool,
+    has_credentials: bool,
+}
+
+pub fn run(ctx: Ctx, path: PathBuf) -> Result<(), AppError> {
+    let report = audit::audit_file(&path).map_err(|e| match e {
+        AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
+        AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
+            "unsupported file type: .{t} (expected .html, .htm, .md, .mdx)"
+        )),
+        AuditError::Io(e) => AppError::Io(e),
+    })?;
+
+    let envelope = AuditEnvelope {
+        file: report.file,
+        file_type: report.file_type,
+        score: report.score,
+        meta: report.meta,
+        open_graph: report.open_graph,
+        twitter_card: report.twitter_card,
+        schema_types: report.schema_types,
+        content: ContentSummary {
+            word_count: report.content.word_count,
+            h1: report.content.h1,
+            h2: report.content.h2,
+            h3: report.content.h3,
+            has_tldr: report.content.has_tldr,
+            has_faq: report.content.has_faq,
+            has_author: report.content.has_author,
+            has_credentials: report.content.has_credentials,
+        },
+        position_bias: report.position_bias,
+        freshness: report.freshness,
+        suggestions: report.suggestions,
+    };
+
+    output::print_success_or(ctx, &envelope, |e| {
+        use owo_colors::OwoColorize;
+        println!("{} {}", "Audit".bold(), e.file.dimmed());
+        println!(
+            "  score: {}/100   words: {}   schemas: {}",
+            score_colour(e.score),
+            e.content.word_count,
+            if e.schema_types.is_empty() {
+                "none".red().to_string()
+            } else {
+                e.schema_types.join(", ").green().to_string()
+            }
+        );
+        if e.suggestions.is_empty() {
+            println!("\n  {}", "No suggestions — ship it.".green());
+        } else {
+            println!("\n  Suggestions:");
+            for s in &e.suggestions {
+                println!("   • {s}");
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn score_colour(score: u32) -> String {
+    use owo_colors::OwoColorize;
+    let s = format!("{score}");
+    match score {
+        90..=100 => s.green().to_string(),
+        70..=89 => s.yellow().to_string(),
+        _ => s.red().to_string(),
+    }
+}
