@@ -44,6 +44,23 @@ aiseo agent-info                            # full machine-readable manifest
 aiseo skill install                         # drop a tiny SKILL.md into ~/.claude/skills/aiseo/
 ```
 
+### Compose with anything that emits HTML or Markdown
+
+`aiseo audit -` reads from stdin. HTML vs Markdown is sniffed from the first non-whitespace character. Lets the CLI plug into any extraction tool without growing its own crawler:
+
+```bash
+# Plain curl for static pages
+curl -s https://example.com | aiseo audit -
+
+# Via the `search` CLI for JS-heavy or anti-bot pages (firecrawl, stealth, browserless)
+search search -q https://js-heavy.com -m scrape --json | jq -r '.results[0].snippet' | aiseo audit -
+
+# Pre-deploy: pipe a built page through aiseo as part of the build
+cat dist/blog/post.html | aiseo audit - --fail-under 80
+```
+
+Markup-only signals (meta tags, OG, schema, freshness) require raw HTML — most extraction tools strip these, so the markup half of the audit will come back empty. Content signals (keywords, entities, voice, position-bias) work on either.
+
 ### What `audit` returns
 
 A single typed JSON envelope. Agents read sub-objects directly; humans read the suggestion list.

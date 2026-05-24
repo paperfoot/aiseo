@@ -1,9 +1,10 @@
 use serde::Serialize;
+use std::io::Read;
 use std::path::PathBuf;
 
 use crate::audit::factors as audit_factors;
 use crate::audit::report::{self, ReportFormat, ReportInput};
-use crate::audit::{self, AuditError};
+use crate::audit::{self, AuditError, ContentType};
 use crate::error::AppError;
 use crate::output::{self, Ctx};
 
@@ -51,13 +52,28 @@ pub fn run(
         None => Vec::new(),
     };
 
-    let mut report = audit::audit_file(&path).map_err(|e| match e {
-        AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
-        AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
-            "unsupported file type: .{t} (expected .html, .htm, .md, .mdx)"
-        )),
-        AuditError::Io(e) => AppError::Io(e),
-    })?;
+    let mut report = if path.as_os_str() == "-" {
+        let mut raw = String::new();
+        std::io::stdin()
+            .read_to_string(&mut raw)
+            .map_err(AppError::Io)?;
+        let ctype = ContentType::sniff(&raw);
+        audit::audit_content(raw, ctype, "<stdin>".to_string()).map_err(|e| match e {
+            AuditError::Io(e) => AppError::Io(e),
+            AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
+            AuditError::UnsupportedType(t) => {
+                AppError::InvalidInput(format!("unsupported content: {t}"))
+            }
+        })?
+    } else {
+        audit::audit_file(&path).map_err(|e| match e {
+            AuditError::NotFound(p) => AppError::InvalidInput(format!("file not found: {p}")),
+            AuditError::UnsupportedType(t) => AppError::InvalidInput(format!(
+                "unsupported file type: .{t} (expected .html, .htm, .md, .mdx, or `-` for stdin)"
+            )),
+            AuditError::Io(e) => AppError::Io(e),
+        })?
+    };
 
     let score = report.score;
 

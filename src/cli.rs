@@ -32,7 +32,9 @@ pub enum Commands {
     /// position bias, freshness, and a flat suggestion list.
     #[command(after_long_help = AUDIT_HELP)]
     Audit {
-        /// Path to .html, .htm, .md, or .mdx file
+        /// Path to .html, .htm, .md, or .mdx file, or `-` to read from stdin
+        /// (auto-detects HTML vs Markdown by sniffing the first non-whitespace
+        /// character).
         file: PathBuf,
         /// Exit 1 if the audit score is below this threshold. Useful in CI.
         #[arg(long, value_name = "SCORE")]
@@ -131,7 +133,12 @@ EXAMPLES:
   aiseo audit page.html --fail-under 80          # CI gate
   aiseo audit page.html --out audit.sarif        # GitHub Code Scanning
   aiseo audit page.html --out audit.md           # committable report
-  aiseo audit page.html | jq '.score_breakdown'  # see deductions";
+  aiseo audit page.html | jq '.score_breakdown'  # see deductions
+
+  # Compose with anything that emits HTML or Markdown on stdout:
+  curl -s https://example.com | aiseo audit -
+  search search -q https://js-heavy.com -m scrape --json \\
+    | jq -r '.results[0].snippet' | aiseo audit -";
 
 #[derive(Subcommand)]
 pub enum SkillAction {

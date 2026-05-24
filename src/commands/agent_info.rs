@@ -18,7 +18,7 @@ pub fn run() {
                         "kind": "positional",
                         "type": "path",
                         "required": true,
-                        "description": "Path to .html, .htm, .md, or .mdx file"
+                        "description": "Path to .html, .htm, .md, or .mdx file. Pass `-` to read from stdin (HTML vs Markdown sniffed from the first non-whitespace character)."
                     }
                 ],
                 "options": [

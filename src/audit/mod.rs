@@ -59,6 +59,34 @@ pub enum AuditError {
     Io(#[from] std::io::Error),
 }
 
+#[derive(Clone, Copy)]
+pub enum ContentType {
+    Html,
+    Markdown,
+}
+
+impl ContentType {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Html => "html",
+            Self::Markdown => "markdown",
+        }
+    }
+
+    /// Sniff the content type from the first few non-whitespace characters.
+    /// HTML if it starts with `<` (handles `<!DOCTYPE`, `<html`, `<div`,
+    /// bare `<meta>`, etc.); Markdown otherwise. Good enough for piped
+    /// agent input — no need for libmagic.
+    pub fn sniff(raw: &str) -> Self {
+        let head = raw.trim_start();
+        if head.starts_with('<') {
+            Self::Html
+        } else {
+            Self::Markdown
+        }
+    }
+}
+
 pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
     if !path.exists() {
         return Err(AuditError::NotFound(path.display().to_string()));
@@ -71,12 +99,28 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    let (file_type, html_like) = match ext.as_str() {
-        "html" | "htm" => ("html", raw.clone()),
-        "md" | "mdx" => ("markdown", markdown_to_html_lite(&raw)),
+    let content_type = match ext.as_str() {
+        "html" | "htm" => ContentType::Html,
+        "md" | "mdx" => ContentType::Markdown,
         other => {
             return Err(AuditError::UnsupportedType(other.to_string()));
         }
+    };
+
+    audit_content(raw, content_type, path.display().to_string())
+}
+
+/// Audit already-loaded content. Used by `audit_file` and by the stdin
+/// path (`aiseo audit -`). `label` is what appears in the `file` field
+/// of the report — a path, a URL, or "<stdin>".
+pub fn audit_content(
+    raw: String,
+    content_type: ContentType,
+    label: String,
+) -> Result<AuditReport, AuditError> {
+    let html_like = match content_type {
+        ContentType::Html => raw.clone(),
+        ContentType::Markdown => markdown_to_html_lite(&raw),
     };
 
     let doc = scraper::Html::parse_document(&html_like);
@@ -97,8 +141,8 @@ pub fn audit_file(path: &Path) -> Result<AuditReport, AuditError> {
     let score = score_breakdown.total;
 
     Ok(AuditReport {
-        file: path.display().to_string(),
-        file_type,
+        file: label,
+        file_type: content_type.label(),
         meta,
         open_graph: og,
         twitter_card: tw,
