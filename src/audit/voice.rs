@@ -58,7 +58,7 @@ fn find_snippet_candidate(sentences: &[&str]) -> Option<String> {
             let w = s.split_whitespace().count();
             words += w;
             acc.push(s);
-            if words >= 30 && words <= 50 {
+            if (30..=50).contains(&words) {
                 return Some(acc.join(" "));
             }
             if words > 50 {

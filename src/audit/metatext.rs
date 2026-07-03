@@ -334,9 +334,11 @@ pub fn extract(body_text: &str, headings: &[String]) -> Metatext {
     let has_fatal = signals.iter().any(|s| s.confidence >= 0.97);
     let strong_skeleton = heading_skeleton.jaccard >= 0.35 && heading_skeleton.matched.len() >= 4;
 
-    let verdict = if has_fatal || strong_skeleton {
-        "metatext_heavy"
-    } else if density > 5.0 || (density > 1.5 && heading_skeleton.jaccard >= 0.20) {
+    let verdict = if has_fatal
+        || strong_skeleton
+        || density > 5.0
+        || (density > 1.5 && heading_skeleton.jaccard >= 0.20)
+    {
         "metatext_heavy"
     } else if density > 1.5 {
         "suspicious"

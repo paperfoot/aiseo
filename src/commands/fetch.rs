@@ -183,9 +183,10 @@ pub fn run(
             ));
         }
         if has("nofollow") && !has("noindex") {
-            extra_suggestions.push(format!(
+            extra_suggestions.push(
                 "X-Robots-Tag header includes `nofollow`. Links on this page pass no authority."
-            ));
+                    .to_string(),
+            );
         }
         if has("noimageindex") {
             extra_suggestions.push(
@@ -198,9 +199,10 @@ pub fn run(
         // user-agent controls in robots.txt. Surface the directive as
         // observed, do not claim major crawlers honour it.
         if has("noai") || has("noimageai") {
-            extra_suggestions.push(format!(
+            extra_suggestions.push(
                 "X-Robots-Tag includes `noai`/`noimageai` (non-standard — Google and Anthropic document robots.txt user-agent controls instead, not these directives). Treat as a signal of intent, not enforcement."
-            ));
+                    .to_string(),
+            );
         }
     }
     if content_encoding.as_deref().is_none() && bytes > 50_000 {

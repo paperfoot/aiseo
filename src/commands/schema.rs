@@ -183,6 +183,8 @@ fn build_faq(qa: Vec<String>) -> Result<serde_json::Value, AppError> {
     }))
 }
 
+// Args mirror the CLI `schema article` flags 1:1 (see SchemaType::Article).
+#[allow(clippy::too_many_arguments)]
 fn build_article(
     title: String,
     description: String,

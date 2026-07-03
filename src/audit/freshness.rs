@@ -99,8 +99,7 @@ pub fn analyze(html: &str, body_text: &str, _schema_types: &[String]) -> Freshne
 
     let visible_updated_label = VISIBLE_DATE_LABEL_RE
         .captures(body_text)
-        .map(|c| c.get(0).map(|m| m.as_str().to_string()))
-        .flatten()
+        .and_then(|c| c.get(0).map(|m| m.as_str().to_string()))
         .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "));
 
     // Schema-vs-visible mismatch with severity escalation.

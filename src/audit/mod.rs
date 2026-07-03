@@ -260,9 +260,9 @@ pub fn audit_content(
 /// renderer; it's testing your SEO/GEO surface.
 fn markdown_to_html_lite(md: &str) -> String {
     // Strip YAML frontmatter if present.
-    let body = if md.starts_with("---") {
-        if let Some(end) = md[3..].find("\n---") {
-            &md[end + 4 + 3..]
+    let body = if let Some(rest) = md.strip_prefix("---") {
+        if let Some(end) = rest.find("\n---") {
+            &rest[end + 4..]
         } else {
             md
         }

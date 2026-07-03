@@ -118,7 +118,7 @@ const GENERIC_ANCHOR: &[&str] =
     &["click here", "read more", "link", "here", "more", "this", "this link", "details"];
 
 pub fn extract(doc: &Html, canonical: Option<&str>) -> LinkGraph {
-    let canonical_host = canonical.and_then(|c| host_of(c));
+    let canonical_host = canonical.and_then(host_of);
 
     let sel = Selector::parse("a[href]").unwrap();
 

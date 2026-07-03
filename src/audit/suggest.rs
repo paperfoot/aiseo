@@ -283,6 +283,9 @@ fn is_english(content: &ContentStructure) -> bool {
 }
 
 /// Single source of truth for scoring. `score_breakdown` builds on top.
+// Args are the distinct audit sub-results, produced separately by their
+// extractors; threading them individually is clearer than an artificial aggregate.
+#[allow(clippy::too_many_arguments)]
 fn deductions(
     meta: &Meta,
     og: &OpenGraph,
@@ -441,6 +444,7 @@ fn deductions(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn score_breakdown(
     meta: &Meta,
     og: &OpenGraph,

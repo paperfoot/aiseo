@@ -236,7 +236,7 @@ pub fn extract(body_text: &str) -> CopyPrecision {
     );
     densities.insert(
         "concrete_per_100_words",
-        (concrete_per_100 * 100.0).round() as f32 / 100.0,
+        (concrete_per_100 * 100.0).round() / 100.0,
     );
 
     CopyPrecision {

@@ -289,7 +289,7 @@ static MATCHERS: LazyLock<Vec<Matcher>> = LazyLock::new(|| {
             |c, _| {
                 let y1: f64 = c[2].parse().ok()?;
                 let y2: f64 = c[4].parse().ok()?;
-                if y1 < -0.1 || y1 > 1.1 || y2 < -0.1 || y2 > 1.1 {
+                if !(-0.1..=1.1).contains(&y1) || !(-0.1..=1.1).contains(&y2) {
                     Some(format!(
                         "cubic-bezier({}, {}, {}, {})",
                         &c[1], &c[2], &c[3], &c[4]
