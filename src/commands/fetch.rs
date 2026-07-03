@@ -104,33 +104,47 @@ pub fn run(
         )));
     }
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(10))
-        .timeout_read(Duration::from_secs(20))
+    let agent: ureq::Agent = ureq::Agent::config_builder()
         .user_agent(USER_AGENT)
-        .redirects(8)
-        .build();
+        .timeout_connect(Some(Duration::from_secs(10)))
+        .timeout_recv_response(Some(Duration::from_secs(20)))
+        .max_redirects(8)
+        .build()
+        .into();
 
     let response = agent.get(&url).call().map_err(|e| match e {
         // 4xx is client error — retry won't help. 5xx and network errors
         // are transient. The old behaviour mapped both to Transient,
         // which made CI retry loops chase 404s forever.
-        ureq::Error::Status(code, _) if (400..500).contains(&code) => {
+        ureq::Error::StatusCode(code) if (400..500).contains(&code) => {
             AppError::InvalidInput(format!("HTTP {code} fetching {url}"))
         }
-        ureq::Error::Status(code, _) => AppError::Transient(format!(
-            "HTTP {code} fetching {url}"
-        )),
-        ureq::Error::Transport(t) => AppError::Transient(format!("network error: {t}")),
+        ureq::Error::StatusCode(code) => {
+            AppError::Transient(format!("HTTP {code} fetching {url}"))
+        }
+        other => AppError::Transient(format!("network error: {other}")),
     })?;
 
-    let status = response.status();
-    let content_type = response.header("content-type").map(str::to_string);
-    let x_robots_tag = response.header("x-robots-tag").map(str::to_string);
-    let content_encoding = response.header("content-encoding").map(str::to_string);
-    let cache_control = response.header("cache-control").map(str::to_string);
-    let last_modified = response.header("last-modified").map(str::to_string);
-    let server = response.header("server").map(str::to_string);
+    let status = response.status().as_u16();
+    // Header reads borrow `response`; scope them in a block so the body can be
+    // consumed by value afterwards.
+    let (content_type, x_robots_tag, content_encoding, cache_control, last_modified, server) = {
+        let get = |name: &str| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string)
+        };
+        (
+            get("content-type"),
+            get("x-robots-tag"),
+            get("content-encoding"),
+            get("cache-control"),
+            get("last-modified"),
+            get("server"),
+        )
+    };
 
     // Cap the body at 10 MB so a hostile / accidental huge response can't
     // exhaust memory. Reads only up to the limit; truncation is signalled
@@ -138,6 +152,7 @@ pub fn run(
     const MAX_BYTES: u64 = 10 * 1024 * 1024;
     let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
     response
+        .into_body()
         .into_reader()
         .take(MAX_BYTES)
         .read_to_end(&mut buf)
