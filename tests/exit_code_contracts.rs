@@ -6,6 +6,9 @@
 use assert_cmd::Command;
 use std::io::Write;
 
+mod common;
+use common::aiseo_in;
+
 fn bin() -> Command {
     Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap()
 }
@@ -72,21 +75,13 @@ fn agent_info_exits_0() {
 #[test]
 fn config_path_exits_0() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut cmd = bin();
-    cmd.env("HOME", tmp.path());
-    #[cfg(not(target_os = "macos"))]
-    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
-    cmd.args(["config", "path"]).assert().code(0);
+    aiseo_in(tmp.path()).args(["config", "path"]).assert().code(0);
 }
 
 #[test]
 fn config_show_exits_0() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut cmd = bin();
-    cmd.env("HOME", tmp.path());
-    #[cfg(not(target_os = "macos"))]
-    cmd.env("XDG_CONFIG_HOME", tmp.path().join(".config"));
-    cmd.args(["config", "show"]).assert().code(0);
+    aiseo_in(tmp.path()).args(["config", "show"]).assert().code(0);
 }
 
 #[test]

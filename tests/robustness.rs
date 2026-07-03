@@ -6,6 +6,9 @@
 use assert_cmd::Command;
 use std::io::Write;
 
+mod common;
+use common::{aiseo_in, write_config_in};
+
 fn bin() -> Command {
     Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap()
 }
@@ -19,70 +22,33 @@ fn fixture() -> tempfile::NamedTempFile {
     f
 }
 
-fn config_dir_in(tmp: &std::path::Path) -> std::path::PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        tmp.join("Library/Application Support")
-            .join(env!("CARGO_PKG_NAME"))
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        tmp.join(".config").join(env!("CARGO_PKG_NAME"))
-    }
-}
-
-fn with_temp_config_home(mut cmd: Command, tmp: &std::path::Path) -> Command {
-    cmd.env("HOME", tmp);
-
-    #[cfg(not(target_os = "macos"))]
-    cmd.env("XDG_CONFIG_HOME", tmp.join(".config"));
-
-    cmd
-}
-
 // ── Malformed config resilience ────────────────────────────────────────────
 
 /// agent-info must work even with a broken config file.
 #[test]
 fn agent_info_works_with_malformed_config() {
     let tmp = tempfile::tempdir().unwrap();
-    let config_dir = config_dir_in(tmp.path());
-    std::fs::create_dir_all(&config_dir).unwrap();
-    std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
+    write_config_in(tmp.path(), "{{invalid toml");
 
-    with_temp_config_home(bin(), tmp.path())
-        .arg("agent-info")
-        .assert()
-        .code(0);
+    aiseo_in(tmp.path()).arg("agent-info").assert().code(0);
 }
 
 /// config path must work even with a broken config file.
 #[test]
 fn config_path_works_with_malformed_config() {
     let tmp = tempfile::tempdir().unwrap();
-    let config_dir = config_dir_in(tmp.path());
-    std::fs::create_dir_all(&config_dir).unwrap();
-    std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
+    write_config_in(tmp.path(), "{{invalid toml");
 
-    with_temp_config_home(bin(), tmp.path())
-        .args(["config", "path"])
-        .assert()
-        .code(0);
+    aiseo_in(tmp.path()).args(["config", "path"]).assert().code(0);
 }
 
 /// config show should fail gracefully with exit 2 on malformed config.
 #[test]
 fn config_show_fails_with_malformed_config() {
     let tmp = tempfile::tempdir().unwrap();
-    let config_dir = config_dir_in(tmp.path());
-    std::fs::create_dir_all(&config_dir).unwrap();
-    std::fs::write(config_dir.join("config.toml"), "{{invalid toml").unwrap();
+    write_config_in(tmp.path(), "{{invalid toml");
 
-    with_temp_config_home(bin(), tmp.path())
-        .args(["config", "show"])
-        .assert()
-        .code(2);
+    aiseo_in(tmp.path()).args(["config", "show"]).assert().code(2);
 }
 
 // ── Constraint enforcement ─────────────────────────────────────────────────
@@ -102,8 +68,7 @@ fn unknown_flag_rejected() {
 fn audit_works_with_temp_home() {
     let tmp = tempfile::tempdir().unwrap();
     let f = fixture();
-    bin()
-        .env("HOME", tmp.path())
+    aiseo_in(tmp.path())
         .args(["audit", f.path().to_str().unwrap()])
         .assert()
         .code(0);
