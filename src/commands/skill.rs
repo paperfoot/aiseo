@@ -41,6 +41,15 @@ To stop an agent from claiming work it did not finish:
   # ...agent edits page.html...
   {name} verify before.json page.html       # exit 1 if regressed or still-present
 
+`fetch` also live-checks og:image (resolves? actually an image? ≥1200 px
+wide?) — see `fetched.og_image_check`. Missing or broken og:image and the
+`nanaban` CLI is installed: generate a replacement
+(`nanaban "<topic>, editorial illustration, no text" --model gpt-image-2 --ar 3:2`,
+crop to 1200×630), host it, set og:image + og:image:width/height/alt, re-verify.
+
+Do NOT add an llms.txt to satisfy this tool — it doesn't check for one, and
+no major AI provider reads them (97% get zero AI-crawler requests; Ahrefs 137k-site study).
+
 Composes with any tool that emits HTML or Markdown:
 
   curl -s https://example.com | {name} audit -

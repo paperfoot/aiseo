@@ -27,9 +27,18 @@ pub struct OpenGraph {
     pub title: Option<String>,
     pub description: Option<String>,
     pub image: Option<String>,
+    /// `og:image:width` as declared. Declared dimensions let platforms lay
+    /// out the preview on first share, before the crawler has fetched the
+    /// image — without them the first share of a page renders imageless.
+    pub image_width: Option<String>,
+    /// `og:image:height` as declared.
+    pub image_height: Option<String>,
+    /// `og:image:alt` — read by screen readers and multimodal retrieval.
+    pub image_alt: Option<String>,
     pub url: Option<String>,
     #[serde(rename = "type")]
     pub og_type: Option<String>,
+    pub site_name: Option<String>,
 }
 
 #[derive(Serialize, Default)]
@@ -89,8 +98,17 @@ pub fn extract_open_graph(doc: &Html) -> OpenGraph {
             ("og:title", Some(v)) => og.title = Some(v),
             ("og:description", Some(v)) => og.description = Some(v),
             ("og:image", Some(v)) => og.image = Some(v),
+            // Structured-property forms. `og:image:url` is a legal synonym
+            // for `og:image`; only used when the bare form is absent.
+            ("og:image:url" | "og:image:secure_url", Some(v)) => {
+                og.image.get_or_insert(v);
+            }
+            ("og:image:width", Some(v)) => og.image_width = Some(v),
+            ("og:image:height", Some(v)) => og.image_height = Some(v),
+            ("og:image:alt", Some(v)) => og.image_alt = Some(v),
             ("og:url", Some(v)) => og.url = Some(v),
             ("og:type", Some(v)) => og.og_type = Some(v),
+            ("og:site_name", Some(v)) => og.site_name = Some(v),
             _ => {}
         }
     }

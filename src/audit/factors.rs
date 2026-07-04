@@ -49,7 +49,9 @@ pub fn parse_list(raw: &str) -> Result<Vec<Factor>, String> {
 pub fn component_factor(name: &str) -> Factor {
     match name {
         "meta_title" | "meta_description" => Factor::Meta,
-        "og_title" | "og_image" => Factor::Og,
+        "og_title" | "og_image" | "og_image_url" | "og_image_dimensions" | "twitter_card" => {
+            Factor::Og
+        }
         "h1" | "h2_count" | "word_count" | "tldr" | "img_alt" | "ai_slop"
         | "information_gain" => Factor::Content,
         "schema" => Factor::Schema,
@@ -77,20 +79,25 @@ fn suggestion_matches(s: &str, f: Factor) -> bool {
     let lower = s.to_ascii_lowercase();
     match f {
         Factor::Meta => lower.contains("meta ") || lower.contains("<title>") || lower.contains("title is"),
-        Factor::Og => lower.contains("og:") || lower.contains("og_") || lower.contains("open graph"),
+        Factor::Og => {
+            lower.contains("og:")
+                || lower.contains("og_")
+                || lower.contains("open graph")
+                || lower.contains("twitter:card")
+        }
         Factor::Content => {
             lower.contains("body ")
                 || lower.contains("h1")
                 || lower.contains("h2")
                 || lower.contains("tl;dr")
+                || lower.contains("answer-first")
                 || lower.contains("words")
                 || lower.contains("heading")
         }
         Factor::Schema => lower.contains("schema") || lower.contains("json-ld"),
         Factor::Freshness => lower.contains("datemodified") || lower.contains("modified") || lower.contains("days ago"),
         Factor::Position => {
-            lower.contains("tl;dr sits")
-                || lower.contains("tl;dr appears")
+            lower.contains("answer summary sits")
                 || lower.contains("first statistic")
                 || lower.contains("position")
         }

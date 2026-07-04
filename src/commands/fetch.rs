@@ -66,6 +66,21 @@ struct FetchInfo {
     last_modified: Option<String>,
     /// `Server` header banner, if disclosed.
     server: Option<String>,
+    /// Live verification of the page's `og:image`: does the URL actually
+    /// serve an image, and at preview quality? `None` when the page has no
+    /// absolute og:image or the check couldn't run (network failure).
+    og_image_check: Option<OgImageCheck>,
+}
+
+#[derive(Serialize)]
+struct OgImageCheck {
+    url: String,
+    /// HTTP status the image URL returned. `None` on transport failure.
+    status: Option<u16>,
+    content_type: Option<String>,
+    /// Pixel dimensions sniffed from the file header (PNG/JPEG/GIF/WebP).
+    width: Option<u32>,
+    height: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -227,6 +242,11 @@ pub fn run(
         ));
     }
 
+    // Live og:image verification — the static audit can only see that the
+    // tag exists; here we check the URL actually serves a preview-quality
+    // image. This is where "OG is on but broken" gets caught.
+    let og_image_check = verify_og_image(&agent, &report.open_graph, &mut extra_suggestions);
+
     if !extra_suggestions.is_empty() {
         report.suggestions.splice(0..0, extra_suggestions);
     }
@@ -243,6 +263,7 @@ pub fn run(
             cache_control,
             last_modified,
             server,
+            og_image_check,
         },
         file: report.file,
         file_type: report.file_type,
@@ -351,4 +372,111 @@ fn score_colour(score: u32) -> String {
         70..=89 => s.yellow().to_string(),
         _ => s.red().to_string(),
     }
+}
+
+/// Fetch the page's `og:image` and check it actually works as a preview:
+/// resolves, serves an image, and is big enough not to degrade the card.
+/// Findings go into `suggestions`; the raw observation lands in the
+/// `fetched.og_image_check` block for agents.
+///
+/// Only absolute http(s) URLs are checked — a relative og:image is already
+/// flagged by the static audit. Transport failures (DNS, TLS, timeout)
+/// produce no finding: we can't tell a broken image from a flaky network,
+/// and a suggestion that comes and goes between runs would poison `verify`.
+fn verify_og_image(
+    agent: &ureq::Agent,
+    og: &crate::audit::OpenGraph,
+    suggestions: &mut Vec<String>,
+) -> Option<OgImageCheck> {
+    let img_url = og.image.as_deref()?;
+    if !(img_url.starts_with("https://") || img_url.starts_with("http://")) {
+        return None;
+    }
+
+    let (status, body, content_type) = match agent.get(img_url).call() {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            let ct = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
+            // 64 KB covers the dimension headers of every supported format.
+            let mut buf = Vec::with_capacity(16 * 1024);
+            let _ = resp
+                .into_body()
+                .into_reader()
+                .take(64 * 1024)
+                .read_to_end(&mut buf);
+            (status, buf, ct)
+        }
+        Err(ureq::Error::StatusCode(code)) => {
+            suggestions.push(format!(
+                "og:image returns HTTP {code}. Every share and AI-citation preview renders blank — fix the URL or ship a new image."
+            ));
+            return Some(OgImageCheck {
+                url: img_url.to_string(),
+                status: Some(code),
+                content_type: None,
+                width: None,
+                height: None,
+            });
+        }
+        Err(_) => return None,
+    };
+
+    let is_svg = content_type.as_deref().is_some_and(|c| c.contains("svg"))
+        || body.starts_with(b"<svg")
+        || body.starts_with(b"<?xml");
+    let declared_image = content_type.as_deref().is_some_and(|c| c.starts_with("image/"));
+
+    if is_svg {
+        suggestions.push(
+            "og:image is SVG. Most platforms refuse SVG previews — export a 1200×630 PNG or JPEG.".into(),
+        );
+    } else if !declared_image && !crate::imgprobe::looks_like_image(&body) {
+        suggestions.push(format!(
+            "og:image serves `{}`, not an image — a bot challenge, login redirect, or error page is answering in its place.",
+            content_type.as_deref().unwrap_or("unknown content-type"),
+        ));
+    }
+
+    let dims = crate::imgprobe::dimensions(&body);
+    if let Some((w, h)) = dims {
+        if w < 200 || h < 200 {
+            suggestions.push(format!(
+                "og:image is {w}×{h}. Below the 200×200 platform minimum — it will be ignored outright."
+            ));
+        } else if w < 600 {
+            suggestions.push(format!(
+                "og:image is {w}×{h}. Under 600 px wide, platforms fall back to the small-thumbnail layout — ship 1200×630."
+            ));
+        } else if w < 1200 {
+            suggestions.push(format!(
+                "og:image is {w}×{h}. Renders soft on high-DPI screens; 1200×630 is the standard."
+            ));
+        }
+        if h > w {
+            suggestions.push(format!(
+                "og:image is portrait ({w}×{h}). Preview cards crop to 1.91:1 landscape — faces and text will be cut."
+            ));
+        }
+        // Declared vs actual: platforms lay out the card from the declared
+        // size before the file arrives, then reflow if it lied.
+        if let Some(decl_w) = og.image_width.as_deref().and_then(|v| v.parse::<u32>().ok())
+            && decl_w != w
+        {
+            suggestions.push(format!(
+                "og:image:width declares {decl_w} but the file is {w} px. Cards lay out from the declared size — align the tags with the file."
+            ));
+        }
+    }
+
+    Some(OgImageCheck {
+        url: img_url.to_string(),
+        status: Some(status),
+        content_type,
+        width: dims.map(|d| d.0),
+        height: dims.map(|d| d.1),
+    })
 }

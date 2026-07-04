@@ -47,7 +47,7 @@ pub fn run() {
                     "score": "0..100 (rough; weighted toward AI-citation surface)",
                     "score_breakdown": "{ total, components: [{ name, deducted, reason }] }",
                     "meta": "{ title, description, keywords, author, canonical }",
-                    "open_graph": "{ title, description, image, url, type }",
+                    "open_graph": "{ title, description, image, image_width, image_height, image_alt, url, type, site_name }",
                     "twitter_card": "{ card, title, description, image }",
                     "schema_types": "[\"Article\", \"FAQPage\", ...]",
                     "content": "{ word_count, h1[], h2[], h3[], has_tldr, has_faq, has_author, has_credentials, image_count, missing_alt_count, html_lang, headings_in_order: [{level, text}], hreflangs[], noscript_kind: 'absent'|'boilerplate_only'|'substantive' }",
@@ -126,7 +126,8 @@ pub fn run() {
                     }
                 ],
                 "output_shape": {
-                    "fetched": "{ url, status, content_type, bytes, fetched_at, x_robots_tag, content_encoding, cache_control }",
+                    "fetched": "{ url, status, content_type, bytes, fetched_at, x_robots_tag, content_encoding, cache_control, last_modified, server, og_image_check: { url, status, content_type, width, height } | null }",
+                    "og_image_check": "live verification that og:image resolves, serves image/*, and is preview-quality (≥1200 px wide, landscape). null when no absolute og:image or the probe hit a network failure.",
                     "...": "all `audit` fields (file, score, meta, content, keywords, entities, evidence, voice, position_bias, freshness, performance, link_graph, suggestions)"
                 }
             },
@@ -213,6 +214,15 @@ pub fn run() {
             "env_prefix": format!("{}_", name.to_uppercase())
         },
         "auto_json_when_piped": true,
+        "workflows": {
+            "og_image_missing": "When the audit flags a missing or broken og:image: generate a 1200×630 image, host it on the site, then add `og:image` (absolute https URL), `og:image:width` 1200, `og:image:height` 630, and `og:image:alt`. If the `nanaban` CLI is installed (brew install paperfoot/tap/nanaban), `nanaban \"<page topic>, editorial illustration, no text\" --model gpt-image-2 --ar 3:2` then crop to 1200×630, or `--model nb2 --ar 16:9 --size 2K` and crop. Re-check with `aiseo verify`.",
+            "fix_loop": "audit --out before.json → edit the page → verify before.json <file>. verify exits 1 while any previous suggestion is still present."
+        },
+        "deliberately_not_checked": {
+            "llms_txt": "Not audited, not recommended. No major AI provider reads it (OpenAI, Anthropic, Google, Meta uncommitted as of mid-2026); Ahrefs' 137k-site study found 97% of llms.txt files receive zero AI-crawler requests. Do not add one to satisfy this tool.",
+            "em_dashes": "Not treated as an AI tell. Broken signal in 2026 — see README.",
+            "word_count_targets": "No ideal-length check. Google's AI-features guidance says there is none; Ahrefs found ~zero correlation between length and AI citation. Only genuinely thin pages (<300 words) are flagged."
+        },
         "research_basis": "https://github.com/paperfoot/aiseo"
     });
     println!("{}", serde_json::to_string_pretty(&info).unwrap());

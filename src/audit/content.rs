@@ -77,7 +77,16 @@ static CREDENTIAL_RE: LazyLock<Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
-static TLDR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
+/// Labelled answer-first summary markers. Wider than a literal "TL;DR" —
+/// pages mark the same block "Key takeaways", "At a glance", "Bottom line".
+/// Bare "Summary" is deliberately excluded: too common in unrelated prose
+/// to be a reliable marker.
+pub(crate) static ANSWER_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(TL;?DR|Key\s+takeaways?|Key\s+points|At\s+a\s+glance|Bottom\s+line|In\s+(?:short|brief)|Quick\s+answer)\b:?",
+    )
+    .unwrap()
+});
 static FAQ_HEADING_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)FAQ|Frequently\s+Asked\s+Questions").unwrap());
 static AUTHOR_RE: LazyLock<Regex> =
@@ -108,7 +117,7 @@ pub fn extract(doc: &Html) -> ContentStructure {
 
     ContentStructure {
         word_count: count_words(&body_text),
-        has_tldr: TLDR_RE.is_match(&body_text),
+        has_tldr: ANSWER_BLOCK_RE.is_match(&body_text),
         has_faq: FAQ_HEADING_RE.is_match(&heading_blob),
         has_author: AUTHOR_RE.is_match(&body_text),
         has_credentials: CREDENTIAL_RE.is_match(&body_text),

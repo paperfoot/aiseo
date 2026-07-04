@@ -11,7 +11,8 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::Serialize;
 
-static TLDR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)TL;?DR:?\s*").unwrap());
+use super::content::ANSWER_BLOCK_RE;
+
 static STAT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)(\d+(?:,\d{3})*(?:\.\d+)?)\s*(%|percent|years?|months?|patients?|people|users?|cases?)",
@@ -46,7 +47,7 @@ pub fn analyze(body_text: &str) -> PositionBias {
         };
     }
 
-    let tldr_off = word_offset(body_text, &TLDR_RE);
+    let tldr_off = word_offset(body_text, &ANSWER_BLOCK_RE);
     let stat_off = word_offset(body_text, &STAT_RE);
     let cred_off = word_offset(body_text, &CREDENTIAL_RE);
 
@@ -65,7 +66,7 @@ pub fn analyze(body_text: &str) -> PositionBias {
         && p > 10.0
     {
         warnings.push(format!(
-            "TL;DR sits at {p}% of body. Move into the first 10%."
+            "Answer summary sits at {p}% of body. Move into the first 10%."
         ));
     }
     if let Some(p) = stat_pct {

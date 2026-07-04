@@ -184,6 +184,7 @@ pub fn audit_content(
     let mut suggestions = suggest::build(
         &meta,
         &og,
+        &tw,
         &content,
         &position_bias,
         &freshness,
@@ -218,6 +219,7 @@ pub fn audit_content(
     let score_breakdown = suggest::score_breakdown(
         &meta,
         &og,
+        &tw,
         &content,
         &position_bias,
         &freshness,

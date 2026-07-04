@@ -69,7 +69,7 @@ Markup-only signals (meta tags, OG, schema, freshness) require raw HTML — most
 A single typed JSON envelope. Agents read sub-objects directly; humans read the suggestion list.
 
 - `meta` — `<title>`, description, keywords, author, canonical
-- `open_graph`, `twitter_card` — social preview surfaces
+- `open_graph`, `twitter_card` — preview surfaces for social *and* AI citation cards. Checked for done-well, not just present: absolute https `og:image`, declared `og:image:width/height` (without them the first share of a page renders imageless), `og:image:alt`, `og:description`, `og:url`↔canonical agreement, `og:type=article` on Article pages, and `twitter:card=summary_large_image` (the one `twitter:*` tag OG can't replace — X falls back per-field but renders the small card without it). `fetch` goes further and **probes the og:image URL live**: HTTP status, real content-type, and pixel dimensions sniffed from the file header (PNG/JPEG/GIF/WebP) — catching 404'd images, bot-challenge pages served as images, SVGs (most platforms refuse them), undersized and portrait images. Result lands in `fetched.og_image_check`.
 - `schema_types` — every `@type` found in JSON-LD blocks (e.g. `["Article", "FAQPage"]`)
 - `content` — H1/H2/H3 lists, word count, presence flags
 - **`keywords`** — `{ primary[], questions[], density{} }`
@@ -131,11 +131,16 @@ The Python skill at [`claude-skill-seo-geo-optimizer`](https://github.com/199-bi
 
 `aiseo` collapses the same surface into a single binary, parses HTML with `scraper` instead of regex, returns honest typed JSON, and ships zero documentation in the skill — the binary describes itself.
 
-## Research basis (May 2026)
+## Research basis (July 2026)
 
-The audit's heuristics are grounded in the post-Gemini-3 AI search landscape:
+The audit's heuristics are grounded in the post-Gemini-3 AI search landscape, re-verified against the mid-2026 literature:
 
-- **Position bias** — first ~30% of a page captures ~44% of AI-search citations (iPullRank, AIBoost 2026).
+- **Position bias** — first ~30% of a page captures ~44% of AI-search citations (iPullRank, AIBoost 2026). Vemetric 2026 adds: a direct answer within the first ~200 words measurably raises citation odds.
+- **Answer-first over "TL;DR"** — what's evidenced is the early answer, not the label. Labelled summary blocks (TL;DR, Key takeaways) help machine extraction (Animalz 2026) but are optional style; the audit detects the wider marker family and scores placement, not the label.
+- **Ranking ≠ citation** — pages ranking top-10 organically supplied 76% of AI Overview citations in July 2025, 38% by March 2026 (digitalapplied). Classic rank is no longer a proxy for AI visibility.
+- **Word count** — Ahrefs' 174k-page study found ~zero correlation (0.04) between length and AI citation. Only genuinely thin pages (<300 words) are flagged; there is no ideal-length check.
+- **Open Graph as AI metadata** — the tags that power link previews now power citation cards in ChatGPT/Perplexity/Claude surfaces. 1200×630 (1.91:1) remains the universal size; declared `og:image:width/height` avoid the imageless first share; relative URLs fail silently everywhere.
+- **llms.txt — deliberately not checked** — no major provider (OpenAI, Anthropic, Google, Meta) has committed to reading it; Ahrefs' 137k-site study found 97% of llms.txt files receive zero AI-crawler requests. `aiseo` will not tell you to add one.
 - **Schema** — useful for entity clarity and rich results, but only ~+2.4% AI Mode citation lift in the Ahrefs 1,885-page test. Don't oversell it.
 - **Freshness** — Perplexity and the post-Gemini-3 AI Overviews both lift recently-modified content.
 - **Named credentials and primary-source citations** — held up in the AgenticGEO and Citation Selection vs Absorption studies (2026).

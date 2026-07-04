@@ -2,7 +2,10 @@
 //! 0-100 score. Agents read the `suggestions` array; humans want a quick
 //! gut number.
 
-use super::{AiSlop, ContentStructure, Freshness, InformationGain, Meta, OpenGraph, PositionBias};
+use super::{
+    AiSlop, ContentStructure, Freshness, InformationGain, Meta, OpenGraph, PositionBias,
+    TwitterCard,
+};
 use serde::Serialize;
 
 /// Per-component deduction. Agents read this to know *which* axis to fix
@@ -20,9 +23,11 @@ pub struct ScoreComponent {
     pub reason: &'static str,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     meta: &Meta,
     og: &OpenGraph,
+    tw: &TwitterCard,
     content: &ContentStructure,
     pos: &PositionBias,
     fresh: &Freshness,
@@ -57,12 +62,56 @@ pub fn build(
         _ => {}
     }
 
+    // ── Open Graph ──────────────────────────────────────────────────────────
+    // OG is no longer just social chrome: the same tags feed link previews
+    // in ChatGPT/Perplexity/Claude citations. "Present" is not "working" —
+    // the common failure is a tag that exists but resolves to nothing.
     if og.title.is_none() {
         out.push("og:title absent.".into());
     }
-    if og.image.is_none() {
-        out.push("og:image absent. 1200×630.".into());
+    match og.image.as_deref() {
+        None => out.push(
+            "og:image absent. Shares and AI-citation previews render bare. Ship 1200×630 (1.91:1), absolute https URL.".into(),
+        ),
+        Some(v) if !(v.starts_with("https://") || v.starts_with("http://")) => out.push(format!(
+            "og:image is not an absolute URL (`{v}`). Crawlers resolve it against nothing — the preview silently fails everywhere. Use the full https URL."
+        )),
+        Some(v) if v.starts_with("http://") => out.push(
+            "og:image is plain http. Platforms that refuse mixed content drop the preview — serve it over https.".into(),
+        ),
+        Some(_) => {
+            if og.image_width.is_none() || og.image_height.is_none() {
+                out.push(
+                    "og:image:width/height absent. The first share of any page renders imageless while the crawler fetches the file — declare 1200 and 630.".into(),
+                );
+            }
+            if og.image_alt.is_none() {
+                out.push("og:image:alt absent. Screen readers and multimodal retrieval read it.".into());
+            }
+        }
     }
+    if og.image.is_some() && og.description.is_none() {
+        out.push("og:description absent. Platforms fall back to the meta description; AI previews may show arbitrary page text instead.".into());
+    }
+    if let (Some(og_url), Some(canon)) = (og.url.as_deref(), meta.canonical.as_deref())
+        && og_url.trim_end_matches('/') != canon.trim_end_matches('/')
+    {
+        out.push(format!(
+            "og:url (`{og_url}`) and canonical (`{canon}`) disagree. Shares and citations split across two URLs — align them."
+        ));
+    }
+    if og.og_type.is_none() && is_article(schema_types) {
+        out.push("og:type absent on an Article page. Declare `og:type=article`.".into());
+    }
+    // twitter:card is the one twitter:* tag OG can't replace: X falls back
+    // to og:title/og:image per-field, but without the card type it renders
+    // the small summary card, not the large image.
+    if tw.card.is_none() && og.image.is_some() {
+        out.push(
+            "twitter:card absent. X falls back to OG for text and image but renders the small card — add `twitter:card=summary_large_image`.".into(),
+        );
+    }
+
     if meta.canonical.is_none() {
         out.push(
             "Canonical link absent. Without it, near-duplicate URLs dilute Google's index and confuse downstream retrieval.".into(),
@@ -119,9 +168,15 @@ pub fn build(
             content.word_count
         ));
     }
-    // TL;DR suggestion only makes sense for pages long enough to need one.
+    // Answer-first: what's evidenced is answering the query early (Vemetric
+    // 2026: a direct answer in the first ~200 words raises citation odds).
+    // A "TL;DR:" label is one way to mark it, not the requirement — labelled
+    // summary blocks help machine extraction (Animalz 2026) but a label-less
+    // opening paragraph that states the answer does the same job.
     if !content.has_tldr && content.word_count >= 150 {
-        out.push("No TL;DR. 40..60 words in the first 10%.".into());
+        out.push(
+            "No answer-first summary detected. State the core answer in the opening 40..60 words; a label (TL;DR, Key takeaways) helps extraction but is optional.".into(),
+        );
     }
     if !content.has_credentials && content.has_author && is_english(content) {
         // Recast (Codex 2026-05-24): the "lifts ChatGPT/Claude citation"
@@ -149,7 +204,7 @@ pub fn build(
     // FAQ-heavy pages, just redundant on light ones.
     if schema_types.iter().any(|t| t == "FAQPage") && content.word_count < 800 {
         out.push(
-            "FAQPage schema is still valid (just no longer gets SERP rich result post 7 May 2026 Google retirement); safe to keep on FAQ-heavy pages but redundant on light pages."
+            "FAQPage schema no longer earns a Google rich result (retired 7 May 2026). Keep it on FAQ-heavy pages — Bing and AI platforms still read it — but it's dead weight on a page this light."
                 .into(),
         );
     }
@@ -289,6 +344,7 @@ fn is_english(content: &ContentStructure) -> bool {
 fn deductions(
     meta: &Meta,
     og: &OpenGraph,
+    tw: &TwitterCard,
     content: &ContentStructure,
     pos: &PositionBias,
     fresh: &Freshness,
@@ -318,11 +374,35 @@ fn deductions(
             reason: "Missing og:title",
         });
     }
-    if og.image.is_none() {
-        out.push(ScoreComponent {
+    match og.image.as_deref() {
+        None => out.push(ScoreComponent {
             name: "og_image",
             deducted: 10,
             reason: "Missing og:image",
+        }),
+        // Relative URL = functionally missing: no platform resolves it.
+        Some(v) if !(v.starts_with("https://") || v.starts_with("http://")) => {
+            out.push(ScoreComponent {
+                name: "og_image_url",
+                deducted: 8,
+                reason: "og:image is not an absolute URL",
+            });
+        }
+        Some(_) => {
+            if og.image_width.is_none() || og.image_height.is_none() {
+                out.push(ScoreComponent {
+                    name: "og_image_dimensions",
+                    deducted: 2,
+                    reason: "og:image:width/height not declared",
+                });
+            }
+        }
+    }
+    if tw.card.is_none() && og.image.is_some() {
+        out.push(ScoreComponent {
+            name: "twitter_card",
+            deducted: 2,
+            reason: "Missing twitter:card",
         });
     }
     if content.h1.is_empty() {
@@ -346,14 +426,15 @@ fn deductions(
             reason: "Body under 300 words",
         });
     }
-    // TL;DR deduction lowered from 5 to 2: the widely-cited "+35% lift"
-    // came from one Mumbai SEO agency blog with no methodology, since
-    // debunked. Position-bias (Indig's 44% finding) holds and stays.
+    // Kept at 2: the widely-cited "+35% TL;DR lift" was one agency blog
+    // with no methodology, since debunked. What holds is answer-first
+    // placement (Vemetric 2026) — this component detects the labelled
+    // marker only, so it stays a nudge, not a penalty.
     if !content.has_tldr && content.word_count >= 150 {
         out.push(ScoreComponent {
             name: "tldr",
             deducted: 2,
-            reason: "No TL;DR detected",
+            reason: "No answer-first summary marker",
         });
     }
     // Schema deduction dropped from 15 -> 5 per Ahrefs Apr 2026 study
@@ -387,7 +468,7 @@ fn deductions(
         out.push(ScoreComponent {
             name: "tldr_position",
             deducted: 5,
-            reason: "TL;DR past first 10% of body",
+            reason: "Answer summary past first 10% of body",
         });
     }
     if let Some(p) = pos.first_stat_position_pct
@@ -448,6 +529,7 @@ fn deductions(
 pub fn score_breakdown(
     meta: &Meta,
     og: &OpenGraph,
+    tw: &TwitterCard,
     content: &ContentStructure,
     pos: &PositionBias,
     fresh: &Freshness,
@@ -455,7 +537,8 @@ pub fn score_breakdown(
     info_gain: &InformationGain,
     schema_types: &[String],
 ) -> ScoreBreakdown {
-    let components = deductions(meta, og, content, pos, fresh, ai_slop, info_gain, schema_types);
+    let components =
+        deductions(meta, og, tw, content, pos, fresh, ai_slop, info_gain, schema_types);
     let total_deducted: u32 = components.iter().map(|c| c.deducted).sum();
     let total = 100u32.saturating_sub(total_deducted);
     ScoreBreakdown { total, components }
